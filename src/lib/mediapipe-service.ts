@@ -12,7 +12,13 @@ export class MediaPipeService {
   private calibrationData: { handSize: number; thumbIndexDist: number } | null = null;
   private lastGestureDetected: number = 0;
   private gestureConfidence: { [key: number]: number } = {};
-  private readonly gestureThreshold: number = 3; // Need to detect the same gesture multiple times
+  private readonly gestureThreshold: number = 2; // Lowered threshold for faster response
+  private cameraStartAttempts: number = 0;
+  private maxCameraAttempts: number = 3;
+  private lastFrameProcessed: number = 0;
+  private processingFrameRate: number = 15; // Process at most 15 frames per second
+  private stuckDetectionTimer: number | null = null;
+  private lastLandmarkTime: number = 0;
 
   constructor() {
     // The actual Hands and Camera initialization will happen when initialize() is called
@@ -34,34 +40,83 @@ export class MediaPipeService {
     this.canvasCtx = canvasElement.getContext('2d');
     this.gestureCallback = onGestureDetected;
     
+    // Create the hands object with optimized settings
     this.hands = new window.Hands({
       locateFile: (file: string) => {
         return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
       }
     });
 
+    // Optimize for performance over accuracy for smoother experience
     this.hands.setOptions({
       maxNumHands: 1,
-      modelComplexity: 1, // Use higher model complexity for better accuracy
-      minDetectionConfidence: 0.6, // Lower threshold for faster detection
+      modelComplexity: 0, // Use lowest complexity for better performance
+      minDetectionConfidence: 0.5, // Lower threshold for better detection
       minTrackingConfidence: 0.5
     });
 
     this.hands.onResults((results: any) => this.onResults(results));
 
-    this.camera = new window.Camera(this.videoElement, {
-      onFrame: async () => {
-        if (this.videoElement && this.hands) {
-          await this.hands.send({ image: this.videoElement });
-        }
-      },
-      width: 640,
-      height: 480
-    });
-
+    // Initialize camera
+    this.initializeCamera();
+    
+    // Set up stuck detection
+    this.setupStuckDetection();
+    
     this.isReady = true;
-    this.camera.start();
     console.log("MediaPipe service initialized");
+  }
+  
+  private initializeCamera(): void {
+    try {
+      this.cameraStartAttempts++;
+      
+      if (this.videoElement) {
+        this.camera = new window.Camera(this.videoElement, {
+          onFrame: async () => {
+            // Only process frames at specified frame rate to improve performance
+            const now = Date.now();
+            if (now - this.lastFrameProcessed > 1000 / this.processingFrameRate) {
+              this.lastFrameProcessed = now;
+              if (this.videoElement && this.hands) {
+                await this.hands.send({ image: this.videoElement });
+              }
+            }
+          },
+          width: 640,
+          height: 480
+        });
+        
+        this.camera.start().catch((err: any) => {
+          console.error("Camera start error:", err);
+          if (this.cameraStartAttempts < this.maxCameraAttempts) {
+            // Try again with a delay
+            setTimeout(() => this.initializeCamera(), 1000);
+          }
+        });
+      }
+    } catch (err) {
+      console.error("Camera initialization error:", err);
+      if (this.cameraStartAttempts < this.maxCameraAttempts) {
+        // Try again with a delay
+        setTimeout(() => this.initializeCamera(), 1000);
+      }
+    }
+  }
+  
+  private setupStuckDetection(): void {
+    // Check every 2 seconds if landmarks are being updated
+    this.stuckDetectionTimer = window.setInterval(() => {
+      const now = Date.now();
+      // If no landmarks received for 3 seconds, try to restart camera
+      if (now - this.lastLandmarkTime > 3000 && this.lastLandmarkTime !== 0) {
+        console.log("Hand tracking appears to be stuck, restarting camera...");
+        if (this.camera) {
+          this.camera.stop();
+        }
+        setTimeout(() => this.initializeCamera(), 500);
+      }
+    }, 2000);
   }
 
   public startCalibration(): void {
@@ -84,22 +139,49 @@ export class MediaPipeService {
     if (this.camera) {
       this.camera.stop();
     }
+    
+    if (this.stuckDetectionTimer) {
+      clearInterval(this.stuckDetectionTimer);
+      this.stuckDetectionTimer = null;
+    }
   }
 
   private onResults(results: any): void {
+    this.lastLandmarkTime = Date.now();
+    
     if (!this.canvasCtx || !this.canvasElement) return;
     
     // Clear canvas
     this.canvasCtx.save();
     this.canvasCtx.clearRect(0, 0, this.canvasElement.width, this.canvasElement.height);
+    
+    // Draw camera feed (mirrored)
+    if (this.videoElement) {
+      this.canvasCtx.drawImage(this.videoElement, 0, 0, this.canvasElement.width, this.canvasElement.height);
+    }
 
-    // Draw hands
+    // Draw hands with improved visibility
     if (results.multiHandLandmarks) {
       for (const landmarks of results.multiHandLandmarks) {
+        // Draw connections with increased visibility
         window.drawConnectors(this.canvasCtx, landmarks, window.HAND_CONNECTIONS, 
-          { color: '#00FF00', lineWidth: 5 });
-        window.drawLandmarks(this.canvasCtx, landmarks, 
-          { color: '#FF0000', lineWidth: 2 });
+          { color: '#22c55e', lineWidth: 3 });
+        
+        // Draw landmarks with different colors for better visualization
+        window.drawLandmarks(this.canvasCtx, landmarks.slice(0, 5), // Thumb landmarks
+          { color: '#f59e0b', lineWidth: 2, radius: 4 });
+        
+        window.drawLandmarks(this.canvasCtx, landmarks.slice(5, 9), // Index finger
+          { color: '#ef4444', lineWidth: 2, radius: 4 });
+          
+        window.drawLandmarks(this.canvasCtx, landmarks.slice(9, 13), // Middle finger
+          { color: '#3b82f6', lineWidth: 2, radius: 4 });
+          
+        window.drawLandmarks(this.canvasCtx, landmarks.slice(13, 17), // Ring finger
+          { color: '#8b5cf6', lineWidth: 2, radius: 4 });
+          
+        window.drawLandmarks(this.canvasCtx, landmarks.slice(17, 21), // Pinky
+          { color: '#ec4899', lineWidth: 2, radius: 4 });
         
         // If we're calibrating, collect calibration data
         if (this.isCalibrating) {
@@ -148,7 +230,7 @@ export class MediaPipeService {
     };
   }
 
-  // Use confidence-based gesture detection to improve reliability
+  // Improved confidence-based gesture detection
   private processGestureWithConfidence(gesture: number): void {
     // Reset confidence for other gestures
     for (const key in this.gestureConfidence) {
@@ -178,51 +260,35 @@ export class MediaPipeService {
   }
 
   private detectImprovedGesture(landmarks: any[]): number {
-    // Improved gesture detection based on the Python reference code
+    // Improved gesture detection optimized for Hand Cricket game
     if (!landmarks || landmarks.length < 21) return 0;
     
-    // Get fingertips and joints
+    // Fingertips and key joints
     const wrist = landmarks[0];
-    const thumbCMC = landmarks[1];
-    const thumbMCP = landmarks[2];
-    const thumbIP = landmarks[3];
     const thumbTip = landmarks[4];
-    
-    const indexMCP = landmarks[5];
-    const indexPIP = landmarks[6];
-    const indexDIP = landmarks[7];
     const indexTip = landmarks[8];
-    
-    const middleMCP = landmarks[9];
-    const middlePIP = landmarks[10];
-    const middleDIP = landmarks[11];
     const middleTip = landmarks[12];
-    
-    const ringMCP = landmarks[13];
-    const ringPIP = landmarks[14];
-    const ringDIP = landmarks[15];
     const ringTip = landmarks[16];
-    
-    const pinkyMCP = landmarks[17];
-    const pinkyPIP = landmarks[18];
-    const pinkyDIP = landmarks[19];
     const pinkyTip = landmarks[20];
     
-    // Calculate vectors and distances for better gesture recognition
-    // Vector from wrist to middle MCP (palm direction)
-    const palmX = middleMCP.x - wrist.x;
-    const palmY = middleMCP.y - wrist.y;
-    const palmZ = middleMCP.z - wrist.z;
+    // MCP joints (knuckles)
+    const indexMCP = landmarks[5];
+    const middleMCP = landmarks[9];
+    const ringMCP = landmarks[13];
+    const pinkyMCP = landmarks[17];
     
-    // Check thumb position
-    // For thumbs up gesture: thumb needs to be extended upwards and other fingers curled
-    const isThumbExtended = this.isThumbUp(thumbTip, thumbIP, wrist, indexMCP);
+    // PIP joints (middle joints)
+    const indexPIP = landmarks[6];
+    const middlePIP = landmarks[10];
+    const ringPIP = landmarks[14];
+    const pinkyPIP = landmarks[18];
     
-    // Check if each finger is extended
-    const isIndexExtended = this.isFingerExtended(indexTip, indexPIP, indexMCP);
-    const isMiddleExtended = this.isFingerExtended(middleTip, middlePIP, middleMCP);
-    const isRingExtended = this.isFingerExtended(ringTip, ringPIP, ringMCP);
-    const isPinkyExtended = this.isFingerExtended(pinkyTip, pinkyPIP, pinkyMCP);
+    // Check if each finger is extended using improved criteria
+    const isThumbUp = this.isFingerExtended(thumbTip, landmarks[3], landmarks[2], wrist, true);
+    const isIndexExtended = this.isFingerExtended(indexTip, indexPIP, indexMCP, wrist);
+    const isMiddleExtended = this.isFingerExtended(middleTip, middlePIP, middleMCP, wrist);
+    const isRingExtended = this.isFingerExtended(ringTip, ringPIP, ringMCP, wrist);
+    const isPinkyExtended = this.isFingerExtended(pinkyTip, pinkyPIP, pinkyMCP, wrist);
     
     // Count extended fingers (excluding thumb)
     const extendedFingerCount = 
@@ -231,22 +297,21 @@ export class MediaPipeService {
       (isRingExtended ? 1 : 0) + 
       (isPinkyExtended ? 1 : 0);
     
-    // Debug output
-    console.log(`Fingers: Thumb: ${isThumbExtended}, Index: ${isIndexExtended}, Middle: ${isMiddleExtended}, Ring: ${isRingExtended}, Pinky: ${isPinkyExtended}`);
+    console.log(`Fingers: Thumb: ${isThumbUp}, Index: ${isIndexExtended}, Middle: ${isMiddleExtended}, Ring: ${isRingExtended}, Pinky: ${isPinkyExtended}`);
     
-    // Special case for thumbs up (gesture 6)
-    // Thumb must be extended and all other fingers curled
-    if (isThumbExtended && extendedFingerCount === 0) {
+    // GESTURE DETECTION LOGIC:
+    
+    // Gesture 6: Only thumb up (👍)
+    if (isThumbUp && extendedFingerCount === 0) {
       return 6;
     }
     
-    // Special case for open hand (gesture 5)
-    // All fingers must be extended
+    // Gesture 5: Open hand with all fingers extended
     if (extendedFingerCount >= 4) {
       return 5;
     }
     
-    // For gestures 1-4, return the number of extended fingers
+    // Gesture 1-4: Number of extended fingers (excluding thumb)
     if (extendedFingerCount > 0 && extendedFingerCount <= 4) {
       return extendedFingerCount;
     }
@@ -255,33 +320,41 @@ export class MediaPipeService {
     return 0;
   }
   
-  // Helper method to check if thumb is in the "thumbs up" position
-  private isThumbUp(thumbTip: any, thumbIP: any, wrist: any, indexMCP: any): boolean {
-    // For thumbs up, the thumb should be pointing upward
-    // This means the y-coordinate of the thumb tip should be significantly lower than the thumb IP
-    const thumbYDiff = thumbIP.y - thumbTip.y;
-    
-    // Also thumb should be extended outward from the hand
-    // Compare the z-coordinate with the wrist to see if it's pointing toward the camera
-    const thumbZDiff = thumbTip.z - wrist.z;
-    
-    // Check if thumb is extended upward and forward
-    return thumbYDiff > 0.1 && Math.abs(thumbZDiff) < 0.1;
-  }
-  
-  // Helper method to check if a finger is extended
-  private isFingerExtended(tip: any, pip: any, mcp: any): boolean {
-    // A finger is extended if its tip is higher (smaller y) than its PIP joint
-    // and the horizontal distance from MCP is significant
-    const verticalDist = pip.y - tip.y;
-    const horizontalDist = Math.sqrt(
-      Math.pow(tip.x - mcp.x, 2) + 
-      Math.pow(tip.z - mcp.z, 2)
-    );
-    
-    // For a finger to be considered extended, it should be higher than the PIP joint
-    // and have some horizontal distance from the MCP joint
-    return verticalDist > 0.05 && horizontalDist > 0.05;
+  // Improved finger extension detection
+  private isFingerExtended(
+    tipLandmark: any, 
+    pipLandmark: any, 
+    mcpLandmark: any, 
+    wristLandmark: any,
+    isThumb: boolean = false
+  ): boolean {
+    if (isThumb) {
+      // For thumb, we need special detection since it moves differently
+      // Check if thumb is sticking out to the side
+      const thumbOutward = tipLandmark.x < mcpLandmark.x - 0.1 || tipLandmark.x > mcpLandmark.x + 0.1;
+      
+      // Check if thumb is pointing up
+      const thumbUp = tipLandmark.y < pipLandmark.y;
+      
+      // Check if thumb is not curled in (comparing z coordinates)
+      const notCurled = Math.abs(tipLandmark.z - pipLandmark.z) < 0.1;
+      
+      // For thumbs-up, we want the thumb extended upward
+      return thumbUp && notCurled;
+    } else {
+      // For other fingers:
+      // 1. Check if finger tip is higher (smaller y) than the PIP joint
+      const isHigherThanPIP = tipLandmark.y < pipLandmark.y - 0.05;
+      
+      // 2. Check if the fingertip is higher than the MCP joint
+      const isHigherThanMCP = tipLandmark.y < mcpLandmark.y;
+      
+      // 3. Check if the finger is extended outward (not curled)
+      const isForward = Math.abs(tipLandmark.z - pipLandmark.z) < 0.07;
+      
+      // Combine checks - finger is considered extended if it's higher than both joints
+      return (isHigherThanPIP || isHigherThanMCP) && isForward;
+    }
   }
 }
 

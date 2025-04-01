@@ -95,6 +95,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setIsOut(false);
           setGameState('bowling');
           setInnings(2);
+          
+          // Small delay to let the OUT! message be seen
+          setTimeout(() => {
+            setPlayerChoice(null);
+            setAiChoice(null);
+          }, 1500);
         } else {
           // Second innings, game over
           setGameState('gameOver');
@@ -108,6 +114,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setIsOut(false);
           setGameState('batting');
           setInnings(2);
+          
+          // Small delay to let the OUT! message be seen
+          setTimeout(() => {
+            setPlayerChoice(null);
+            setAiChoice(null);
+          }, 1500);
         } else {
           // Second innings, game over
           setGameState('gameOver');
@@ -124,6 +136,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Check if target achieved in second innings
       if (target !== null && newScore >= target) {
         setGameState('gameOver');
+      } else {
+        // Reset choices after a short delay
+        setTimeout(() => {
+          setPlayerChoice(null);
+          setAiChoice(null);
+          setIsOut(false);
+        }, 1000);
       }
     } else {
       const newScore = aiScore + aiMove;
@@ -132,6 +151,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Check if target achieved in second innings
       if (target !== null && newScore >= target) {
         setGameState('gameOver');
+      } else {
+        // Reset choices after a short delay
+        setTimeout(() => {
+          setPlayerChoice(null);
+          setAiChoice(null);
+          setIsOut(false);
+        }, 1000);
       }
     }
   };
@@ -140,6 +166,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const startGame = (battingFirst: boolean) => {
     setUserBatting(battingFirst);
     setGameState(battingFirst ? 'batting' : 'bowling');
+    
+    // Clear any previous choices when starting a new game
+    setPlayerChoice(null);
+    setAiChoice(null);
+    setIsOut(false);
   };
 
   // Handle toss choice
@@ -153,7 +184,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // AI chooses to bat or bowl
       const aiChoice = Math.random() > 0.5;
       setUserBatting(!aiChoice);
-      setGameState(aiChoice ? 'bowling' : 'batting');
+      // We don't set gameState here, this is handled by the UI
     }
     
     // If user won, they need to choose bat or bowl

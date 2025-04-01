@@ -8,10 +8,12 @@ import { GooeyText } from '@/components/ui/gooey-text-morphing';
 import { ButtonCta } from '@/components/ui/button-shiny';
 import { Button } from '@/components/ui/button';
 import HandGestureDetector from '@/components/HandGestureDetector';
+import GameResults from '@/components/GameResults';
 import { useTheme } from 'next-themes';
 import { toast } from '@/hooks/use-toast';
 import { Pause, Info } from 'lucide-react';
 import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
+import { AnimatedCounter } from '@/components/ui/animated-counter';
 import PauseMenu from '@/components/PauseMenu';
 
 const Game = () => {
@@ -27,6 +29,7 @@ const Game = () => {
     playerChoice,
     aiChoice,
     userBatting,
+    isOut,
     tossResult,
     startGame,
     makeChoice,
@@ -41,6 +44,8 @@ const Game = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [aiThinking, setAiThinking] = useState(false);
+  const [showInningsEnd, setShowInningsEnd] = useState(false);
+  const [showGameOver, setShowGameOver] = useState(false);
 
   useEffect(() => {
     // If a choice was made, start countdown for next move
@@ -59,10 +64,28 @@ const Game = () => {
       return () => clearInterval(timer);
     }
   }, [playerChoice, aiChoice]);
+  
+  // Watch for innings changes and game over
+  useEffect(() => {
+    if (innings === 2 && target !== null && !showInningsEnd) {
+      // First innings just ended
+      setShowInningsEnd(true);
+    }
+    
+    if (gameState === 'gameOver' && !showGameOver) {
+      // Game is over
+      setShowGameOver(true);
+    }
+  }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
   const handleGestureDetected = (gesture: number) => {
     // Only accept gestures if we're not in countdown and the game is in progress
-    if (countdown === null && (gameState === 'batting' || gameState === 'bowling') && !isPaused) {
+    if (countdown === null && 
+        (gameState === 'batting' || gameState === 'bowling') && 
+        !isPaused && 
+        !showInningsEnd && 
+        !showGameOver) {
+      
       if (gesture >= 1 && gesture <= 6) {
         // Show AI thinking animation
         setAiThinking(true);
@@ -126,6 +149,19 @@ const Game = () => {
     });
   };
   
+  // Handle continuing after first innings
+  const handleContinueToNextInnings = () => {
+    setShowInningsEnd(false);
+  };
+  
+  // Handle restarting the game
+  const handleRestartGame = () => {
+    resetGame();
+    setShowInningsEnd(false);
+    setShowGameOver(false);
+    setShowHandDetector(false);
+  };
+  
   // Pause game handlers
   const handlePause = () => {
     setIsPaused(true);
@@ -159,7 +195,7 @@ const Game = () => {
       <PauseMenu 
         open={isPaused}
         onOpenChange={setIsPaused}
-        onRestart={resetGame}
+        onRestart={handleRestartGame}
         onResume={handleResume}
         soundEnabled={soundEnabled}
         onToggleSound={handleToggleSound}
@@ -204,6 +240,20 @@ const Game = () => {
           </div>
         )}
         
+        {/* Innings End or Game Over Overlay */}
+        {(showInningsEnd || showGameOver) && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center">
+            <GameResults 
+              isGameOver={showGameOver}
+              isFirstInningsOver={showInningsEnd && !showGameOver}
+              playerScore={playerScore}
+              aiScore={aiScore}
+              target={target}
+              onRestartGame={showGameOver ? handleRestartGame : handleContinueToNextInnings}
+            />
+          </div>
+        )}
+        
         {/* Game content */}
         <div className="flex flex-col md:flex-row gap-6">
           {/* Left side - Controls and info */}
@@ -222,15 +272,19 @@ const Game = () => {
               />
             </div>
             
-            {/* Score display */}
+            {/* Score display with animated counters */}
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="bg-background/80 p-4 rounded-lg text-center">
-                <h3 className="text-lg font-medium">Your Score</h3>
-                <p className="text-3xl font-bold">{playerScore}</p>
+                <h3 className="text-lg font-medium mb-2">Your Score</h3>
+                <div className="flex justify-center">
+                  <AnimatedCounter value={playerScore} />
+                </div>
               </div>
               <div className="bg-background/80 p-4 rounded-lg text-center">
-                <h3 className="text-lg font-medium">AI Score</h3>
-                <p className="text-3xl font-bold">{aiScore}</p>
+                <h3 className="text-lg font-medium mb-2">AI Score</h3>
+                <div className="flex justify-center">
+                  <AnimatedCounter value={aiScore} />
+                </div>
               </div>
             </div>
             
@@ -239,9 +293,10 @@ const Game = () => {
               <h3 className="text-lg font-medium mb-2">Game Info</h3>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>Innings: {innings}</div>
-                <div>Target: {target > 0 ? target : 'N/A'}</div>
+                <div>Target: {target ? <span className="font-medium text-primary">{target}</span> : 'N/A'}</div>
                 <div>Your choice: {playerChoice !== null ? (playerChoice === 6 ? '👍' : playerChoice) : '-'}</div>
                 <div>AI choice: {aiChoice !== null ? (aiChoice === 6 ? '👍' : aiChoice) : '-'}</div>
+                {isOut && <div className="col-span-2 text-destructive font-medium">OUT! {playerChoice} = {aiChoice}</div>}
               </div>
             </div>
             
@@ -283,7 +338,7 @@ const Game = () => {
                 </div>
               )}
               
-              {gameState === 'gameOver' && (
+              {gameState === 'gameOver' && !showGameOver && (
                 <div className="flex flex-col items-center gap-3">
                   <p className="text-xl font-bold text-center">
                     {playerScore > aiScore ? 'You Won! 🎉' : 
@@ -291,7 +346,7 @@ const Game = () => {
                   </p>
                   <ButtonCta 
                     label="Play Again" 
-                    onClick={resetGame}
+                    onClick={handleRestartGame}
                     className="w-full"
                   />
                 </div>
@@ -321,7 +376,10 @@ const Game = () => {
           {/* Right side - Hand gesture detector */}
           <div className="flex-1">
             {showHandDetector ? (
-              <HandGestureDetector onGestureDetected={handleGestureDetected} />
+              <HandGestureDetector 
+                onGestureDetected={handleGestureDetected} 
+                disabled={isPaused || showInningsEnd || showGameOver}
+              />
             ) : (
               <div className="bg-background/80 p-6 rounded-lg h-full flex items-center justify-center">
                 <p className="text-center text-muted-foreground">

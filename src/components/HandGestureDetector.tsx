@@ -6,12 +6,17 @@ import { ButtonCta } from '@/components/ui/button-shiny';
 import { toast } from '@/hooks/use-toast';
 import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
 import { Progress } from '@/components/ui/progress';
+import { RefreshCw, Camera, CameraOff } from 'lucide-react';
 
 interface HandGestureDetectorProps {
   onGestureDetected: (gesture: number) => void;
+  disabled?: boolean;
 }
 
-const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDetected }) => {
+const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ 
+  onGestureDetected,
+  disabled = false 
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isCalibrating, setIsCalibrating] = useState(true);
@@ -20,12 +25,15 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
   const [calibrationProgress, setCalibrationProgress] = useState(0);
   const lastGestureTimeRef = useRef<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [cameraActive, setCameraActive] = useState(true);
   
   // Add gesture throttling to prevent too frequent updates
   const throttledGestureDetection = (gesture: number) => {
+    if (disabled) return;
+    
     const now = Date.now();
-    // Only process gestures at most once per 750ms
-    if (now - lastGestureTimeRef.current > 750 && gesture > 0) {
+    // Only process gestures at most once per 500ms (faster response)
+    if (now - lastGestureTimeRef.current > 500 && gesture > 0) {
       lastGestureTimeRef.current = now;
       setIsProcessing(true);
       
@@ -39,7 +47,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
 
   useEffect(() => {
     // Initialize MediaPipe when component mounts
-    if (videoRef.current && canvasRef.current) {
+    if (videoRef.current && canvasRef.current && cameraActive) {
       mediaPipeService.initialize(
         videoRef.current,
         canvasRef.current,
@@ -51,7 +59,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
       // Clean up when component unmounts
       mediaPipeService.stopCamera();
     };
-  }, [onGestureDetected]);
+  }, [onGestureDetected, cameraActive]);
 
   const startCalibration = () => {
     setIsCalibrating(true);
@@ -98,23 +106,60 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
       });
     }, 1000);
   };
+  
+  const handleRestartCamera = () => {
+    // Stop current camera
+    mediaPipeService.stopCamera();
+    
+    // Toggle camera state to trigger re-initialization
+    setCameraActive(false);
+    
+    // Small delay before restarting
+    setTimeout(() => {
+      setCameraActive(true);
+      
+      // Need to reinitialize after camera restart
+      setTimeout(() => {
+        if (videoRef.current && canvasRef.current) {
+          mediaPipeService.initialize(
+            videoRef.current,
+            canvasRef.current,
+            throttledGestureDetection
+          );
+          
+          toast({
+            title: "Camera restarted",
+            description: "Camera has been restarted successfully",
+          });
+        }
+      }, 500);
+    }, 500);
+  };
 
   return (
     <div className="flex flex-col items-center">
       <div className="relative w-full max-w-md bg-background rounded-lg overflow-hidden">
-        <video
-          ref={videoRef}
-          className="w-full h-auto rounded-lg"
-          autoPlay
-          playsInline
-          muted
-        />
-        <canvas
-          ref={canvasRef}
-          className="absolute top-0 left-0 w-full h-full"
-          width="640"
-          height="480"
-        />
+        {cameraActive ? (
+          <>
+            <video
+              ref={videoRef}
+              className="w-full h-auto rounded-lg"
+              autoPlay
+              playsInline
+              muted
+            />
+            <canvas
+              ref={canvasRef}
+              className="absolute top-0 left-0 w-full h-full"
+              width="640"
+              height="480"
+            />
+          </>
+        ) : (
+          <div className="w-full aspect-video bg-muted/50 flex items-center justify-center rounded-lg">
+            <CameraOff className="w-12 h-12 text-muted-foreground" />
+          </div>
+        )}
         
         {isCalibrating && countdown > 0 && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60">
@@ -151,6 +196,19 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
             </TextShimmerWave>
           </div>
         )}
+        
+        {/* Camera controls */}
+        <div className="absolute top-4 left-4">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={handleRestartCamera}
+            className="bg-background/50 hover:bg-background"
+            title="Restart camera if you're having issues"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
       
       <div className="mt-4 w-full">
@@ -159,6 +217,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
             label="Start Calibration"
             onClick={startCalibration}
             className="w-full"
+            icon={<Camera className="h-4 w-4" />}
           />
         ) : (
           <div className="bg-green-500/20 p-3 rounded-lg text-center">
