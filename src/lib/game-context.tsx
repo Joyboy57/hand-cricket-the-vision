@@ -1,41 +1,38 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
-// Enum for game state
-export enum GameState {
-  TOSS = 'toss',
-  BATTING = 'batting',
-  BOWLING = 'bowling',
-  GAME_OVER = 'game_over'
-}
+// Game state types
+export type GameState = 'toss' | 'batting' | 'bowling' | 'gameOver';
 
 // Type for game context
 type GameContextType = {
   gameState: GameState;
-  userScore: number;
+  playerScore: number;
   aiScore: number;
+  innings: number;
   target: number | null;
+  playerChoice: number | null;
+  aiChoice: number | null;
   userBatting: boolean;
-  lastUserMove: number | null;
-  lastAiMove: number | null;
   isOut: boolean;
   tossResult: string | null;
-  setGameState: (state: GameState) => void;
+  startGame: (battingFirst: boolean) => void;
   resetGame: () => void;
-  makeMove: (userMove: number) => void;
+  makeChoice: (userMove: number) => void;
   chooseToss: (choice: 'heads' | 'tails') => void;
   chooseBatOrBowl: (choice: 'bat' | 'bowl') => void;
 };
 
 // Initial state for game context
 const initialState = {
-  gameState: GameState.TOSS,
-  userScore: 0,
+  gameState: 'toss' as GameState,
+  playerScore: 0,
   aiScore: 0,
+  innings: 1,
   target: null,
+  playerChoice: null,
+  aiChoice: null,
   userBatting: false,
-  lastUserMove: null,
-  lastAiMove: null,
   isOut: false,
   tossResult: null,
 };
@@ -45,25 +42,27 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 
 // Provider component
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [gameState, setGameState] = useState<GameState>(GameState.TOSS);
-  const [userScore, setUserScore] = useState(0);
+  const [gameState, setGameState] = useState<GameState>('toss');
+  const [playerScore, setPlayerScore] = useState(0);
   const [aiScore, setAiScore] = useState(0);
+  const [innings, setInnings] = useState(1);
   const [target, setTarget] = useState<number | null>(null);
   const [userBatting, setUserBatting] = useState(false);
-  const [lastUserMove, setLastUserMove] = useState<number | null>(null);
-  const [lastAiMove, setLastAiMove] = useState<number | null>(null);
+  const [playerChoice, setPlayerChoice] = useState<number | null>(null);
+  const [aiChoice, setAiChoice] = useState<number | null>(null);
   const [isOut, setIsOut] = useState(false);
   const [tossResult, setTossResult] = useState<string | null>(null);
 
   // Reset game state
   const resetGame = () => {
-    setGameState(GameState.TOSS);
-    setUserScore(0);
+    setGameState('toss');
+    setPlayerScore(0);
     setAiScore(0);
+    setInnings(1);
     setTarget(null);
     setUserBatting(false);
-    setLastUserMove(null);
-    setLastAiMove(null);
+    setPlayerChoice(null);
+    setAiChoice(null);
     setIsOut(false);
     setTossResult(null);
   };
@@ -74,14 +73,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   // Handle user move
-  const makeMove = (userMove: number) => {
+  const makeChoice = (userMove: number) => {
     if (userMove < 1 || userMove > 6) {
       throw new Error('Invalid move: Must be between 1 and 6');
     }
 
     const aiMove = generateAiMove();
-    setLastUserMove(userMove);
-    setLastAiMove(aiMove);
+    setPlayerChoice(userMove);
+    setAiChoice(aiMove);
 
     // Check if out
     if (userMove === aiMove) {
@@ -91,13 +90,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // User was batting and got out
         if (target === null) {
           // First innings, set target for AI
-          setTarget(userScore + 1);
+          setTarget(playerScore + 1);
           setUserBatting(false);
           setIsOut(false);
-          setGameState(GameState.BOWLING);
+          setGameState('bowling');
+          setInnings(2);
         } else {
           // Second innings, game over
-          setGameState(GameState.GAME_OVER);
+          setGameState('gameOver');
         }
       } else {
         // AI was batting and got out
@@ -106,10 +106,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           setTarget(aiScore + 1);
           setUserBatting(true);
           setIsOut(false);
-          setGameState(GameState.BATTING);
+          setGameState('batting');
+          setInnings(2);
         } else {
           // Second innings, game over
-          setGameState(GameState.GAME_OVER);
+          setGameState('gameOver');
         }
       }
       return;
@@ -117,22 +118,28 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Not out, update scores
     if (userBatting) {
-      setUserScore(prev => prev + userMove);
+      const newScore = playerScore + userMove;
+      setPlayerScore(newScore);
       
       // Check if target achieved in second innings
-      if (target !== null && userScore + userMove >= target) {
-        setUserScore(prev => prev + userMove);
-        setGameState(GameState.GAME_OVER);
+      if (target !== null && newScore >= target) {
+        setGameState('gameOver');
       }
     } else {
-      setAiScore(prev => prev + aiMove);
+      const newScore = aiScore + aiMove;
+      setAiScore(newScore);
       
       // Check if target achieved in second innings
-      if (target !== null && aiScore + aiMove >= target) {
-        setAiScore(prev => prev + aiMove);
-        setGameState(GameState.GAME_OVER);
+      if (target !== null && newScore >= target) {
+        setGameState('gameOver');
       }
     }
+  };
+
+  // Start game after toss
+  const startGame = (battingFirst: boolean) => {
+    setUserBatting(battingFirst);
+    setGameState(battingFirst ? 'batting' : 'bowling');
   };
 
   // Handle toss choice
@@ -146,7 +153,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // AI chooses to bat or bowl
       const aiChoice = Math.random() > 0.5;
       setUserBatting(!aiChoice);
-      setGameState(aiChoice ? GameState.BOWLING : GameState.BATTING);
+      setGameState(aiChoice ? 'bowling' : 'batting');
     }
     
     // If user won, they need to choose bat or bowl
@@ -156,24 +163,25 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Handle bat or bowl choice after winning toss
   const chooseBatOrBowl = (choice: 'bat' | 'bowl') => {
     setUserBatting(choice === 'bat');
-    setGameState(choice === 'bat' ? GameState.BATTING : GameState.BOWLING);
+    setGameState(choice === 'bat' ? 'batting' : 'bowling');
   };
 
   return (
     <GameContext.Provider
       value={{
         gameState,
-        userScore,
+        playerScore,
         aiScore,
+        innings,
         target,
+        playerChoice,
+        aiChoice,
         userBatting,
-        lastUserMove,
-        lastAiMove,
         isOut,
         tossResult,
-        setGameState,
+        startGame,
         resetGame,
-        makeMove,
+        makeChoice,
         chooseToss,
         chooseBatOrBowl,
       }}
