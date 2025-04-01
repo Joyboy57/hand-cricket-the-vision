@@ -8,6 +8,7 @@ import { GooeyText } from '@/components/ui/gooey-text-morphing';
 import { ButtonCta } from '@/components/ui/button-shiny';
 import HandGestureDetector from '@/components/HandGestureDetector';
 import { useTheme } from 'next-themes';
+import { toast } from '@/hooks/use-toast';
 
 const Game = () => {
   const { user } = useAuth();
@@ -21,13 +22,18 @@ const Game = () => {
     target,
     playerChoice,
     aiChoice,
+    userBatting,
+    tossResult,
     startGame,
     makeChoice,
     resetGame,
+    chooseToss,
+    chooseBatOrBowl,
   } = useGame();
   
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showHandDetector, setShowHandDetector] = useState(false);
+  const [wonToss, setWonToss] = useState(false);
 
   useEffect(() => {
     // If a choice was made, start countdown for next move
@@ -50,19 +56,51 @@ const Game = () => {
   const handleGestureDetected = (gesture: number) => {
     // Only accept gestures if we're not in countdown and the game is in progress
     if (countdown === null && (gameState === 'batting' || gameState === 'bowling')) {
-      makeChoice(gesture);
+      if (gesture >= 1 && gesture <= 6) {
+        makeChoice(gesture);
+        // Add a visual feedback for the detected gesture
+        toast({
+          title: `Gesture detected: ${gesture}`,
+          description: gesture === 6 ? "Thumbs up! 👍" : `${gesture} finger${gesture > 1 ? 's' : ''}`,
+          duration: 1000,
+        });
+      }
     }
   };
 
-  // Handle toss outcome and start game
+  // Handle toss outcome and let user choose
   const handleTossChoice = (choice: 'heads' | 'tails') => {
     const random = Math.random() > 0.5 ? 'heads' : 'tails';
     const won = random === choice;
-    const battingFirst = won ? (Math.random() > 0.5) : !(Math.random() > 0.5);
-    startGame(battingFirst);
     
-    // Show hand detector after toss
+    if (won) {
+      setWonToss(true);
+      toast({
+        title: "You won the toss!",
+        description: "Choose whether to bat or bowl first",
+        variant: "success"
+      });
+    } else {
+      // AI chooses randomly
+      const aiChoice = Math.random() > 0.5;
+      toast({
+        title: "You lost the toss!",
+        description: `AI has chosen to ${aiChoice ? 'bowl' : 'bat'} first`,
+      });
+      startGame(!aiChoice); // !aiChoice because if AI bowls, user bats
+      setShowHandDetector(true);
+    }
+  };
+
+  // Handle user's choice after winning toss
+  const handleBatBowlChoice = (isBatting: boolean) => {
+    startGame(isBatting);
     setShowHandDetector(true);
+    setWonToss(false);
+    toast({
+      title: `You chose to ${isBatting ? 'bat' : 'bowl'} first`,
+      description: "Get ready to play!",
+    });
   };
 
   return (
@@ -129,7 +167,7 @@ const Game = () => {
             
             {/* Game controls */}
             <div className="bg-background/80 p-4 rounded-lg">
-              {gameState === 'toss' && (
+              {gameState === 'toss' && !wonToss && (
                 <div className="flex flex-col gap-3">
                   <p className="text-center">Choose Heads or Tails for the toss:</p>
                   <div className="flex gap-4 justify-center">
@@ -141,6 +179,24 @@ const Game = () => {
                     <ButtonCta 
                       label="Tails" 
                       onClick={() => handleTossChoice('tails')}
+                      className="w-32"
+                    />
+                  </div>
+                </div>
+              )}
+              
+              {gameState === 'toss' && wonToss && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-center font-medium">You won the toss! Choose to:</p>
+                  <div className="flex gap-4 justify-center">
+                    <ButtonCta 
+                      label="Bat First" 
+                      onClick={() => handleBatBowlChoice(true)}
+                      className="w-32"
+                    />
+                    <ButtonCta 
+                      label="Bowl First" 
+                      onClick={() => handleBatBowlChoice(false)}
                       className="w-32"
                     />
                   </div>
@@ -164,6 +220,19 @@ const Game = () => {
               {(gameState === 'batting' || gameState === 'bowling') && countdown !== null && (
                 <div className="flex justify-center items-center h-20">
                   <p className="text-3xl font-bold">Next ball in: {countdown}</p>
+                </div>
+              )}
+              
+              {(gameState === 'batting' || gameState === 'bowling') && countdown === null && (
+                <div className="p-3 bg-primary/10 rounded-lg text-center">
+                  <p className="text-primary">
+                    {gameState === 'batting' 
+                      ? "Show your hand gesture to score runs!" 
+                      : "Show your hand gesture to try and get the AI out!"}
+                  </p>
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    1-4 fingers = score 1-4 | Open hand = 5 | Thumbs up = 6
+                  </div>
                 </div>
               )}
             </div>

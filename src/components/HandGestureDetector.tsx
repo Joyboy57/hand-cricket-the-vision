@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { mediaPipeService } from '@/lib/mediapipe-service';
 import { Button } from '@/components/ui/button';
 import { ButtonCta } from '@/components/ui/button-shiny';
+import { toast } from '@/hooks/use-toast';
 
 interface HandGestureDetectorProps {
   onGestureDetected: (gesture: number) => void;
@@ -14,6 +15,17 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
   const [isCalibrating, setIsCalibrating] = useState(true);
   const [calibrationComplete, setCalibrationComplete] = useState(false);
   const [countdown, setCountdown] = useState(5);
+  const lastGestureTimeRef = useRef<number>(0);
+  
+  // Add gesture throttling to prevent too frequent updates
+  const throttledGestureDetection = (gesture: number) => {
+    const now = Date.now();
+    // Only process gestures at most once per 750ms
+    if (now - lastGestureTimeRef.current > 750 && gesture > 0) {
+      lastGestureTimeRef.current = now;
+      onGestureDetected(gesture);
+    }
+  };
 
   useEffect(() => {
     // Initialize MediaPipe when component mounts
@@ -21,7 +33,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
       mediaPipeService.initialize(
         videoRef.current,
         canvasRef.current,
-        onGestureDetected
+        throttledGestureDetection
       );
     }
 
@@ -43,10 +55,20 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
           clearInterval(timer);
           mediaPipeService.startCalibration();
           
+          toast({
+            title: "Calibration in progress",
+            description: "Please show your hand clearly with all fingers extended",
+          });
+          
           // Set calibration complete after 5 seconds
           setTimeout(() => {
             setIsCalibrating(false);
             setCalibrationComplete(true);
+            toast({
+              title: "Calibration complete",
+              description: "You can now play. Show 1-5 fingers or thumbs up (6)",
+              variant: "success"
+            });
           }, 5000);
           return 0;
         }
@@ -63,6 +85,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
           className="w-full h-auto rounded-lg"
           autoPlay
           playsInline
+          muted
         />
         <canvas
           ref={canvasRef}
@@ -96,8 +119,15 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
             className="w-full"
           />
         ) : (
-          <div className="text-green-500 font-medium">
-            Calibration complete! You can now play.
+          <div className="bg-green-500/20 p-3 rounded-lg text-center">
+            <span className="text-green-500 font-medium">
+              Calibration complete! You can now play.
+            </span>
+            <div className="mt-2 grid grid-cols-3 gap-2 text-sm text-muted-foreground">
+              <div>1-4 fingers = score 1-4</div>
+              <div>Open hand = score 5</div>
+              <div>Thumbs up = score 6</div>
+            </div>
           </div>
         )}
       </div>
