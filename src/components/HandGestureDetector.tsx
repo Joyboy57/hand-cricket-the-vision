@@ -4,6 +4,8 @@ import { mediaPipeService } from '@/lib/mediapipe-service';
 import { Button } from '@/components/ui/button';
 import { ButtonCta } from '@/components/ui/button-shiny';
 import { toast } from '@/hooks/use-toast';
+import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
+import { Progress } from '@/components/ui/progress';
 
 interface HandGestureDetectorProps {
   onGestureDetected: (gesture: number) => void;
@@ -15,7 +17,9 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
   const [isCalibrating, setIsCalibrating] = useState(true);
   const [calibrationComplete, setCalibrationComplete] = useState(false);
   const [countdown, setCountdown] = useState(5);
+  const [calibrationProgress, setCalibrationProgress] = useState(0);
   const lastGestureTimeRef = useRef<number>(0);
+  const [isProcessing, setIsProcessing] = useState(false);
   
   // Add gesture throttling to prevent too frequent updates
   const throttledGestureDetection = (gesture: number) => {
@@ -23,7 +27,13 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
     // Only process gestures at most once per 750ms
     if (now - lastGestureTimeRef.current > 750 && gesture > 0) {
       lastGestureTimeRef.current = now;
-      onGestureDetected(gesture);
+      setIsProcessing(true);
+      
+      // Simulate a quick "thinking" period for better user feedback
+      setTimeout(() => {
+        onGestureDetected(gesture);
+        setIsProcessing(false);
+      }, 200);
     }
   };
 
@@ -53,23 +63,35 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          mediaPipeService.startCalibration();
           
+          // Start calibration progress
+          mediaPipeService.startCalibration();
           toast({
             title: "Calibration in progress",
             description: "Please show your hand clearly with all fingers extended",
           });
           
-          // Set calibration complete after 5 seconds
-          setTimeout(() => {
-            setIsCalibrating(false);
-            setCalibrationComplete(true);
-            toast({
-              title: "Calibration complete",
-              description: "You can now play. Show 1-5 fingers or thumbs up (6)",
-              variant: "success"
-            });
-          }, 5000);
+          // Show progress bar increasing during calibration
+          let progress = 0;
+          const progressTimer = setInterval(() => {
+            progress += 5;
+            setCalibrationProgress(progress);
+            
+            if (progress >= 100) {
+              clearInterval(progressTimer);
+              // Set calibration complete
+              setTimeout(() => {
+                setIsCalibrating(false);
+                setCalibrationComplete(true);
+                toast({
+                  title: "Calibration complete",
+                  description: "You can now play. Show 1-5 fingers or thumbs up (6)",
+                  variant: "success"
+                });
+              }, 300);
+            }
+          }, 250);
+          
           return 0;
         }
         return prev - 1;
@@ -103,15 +125,35 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ onGestureDete
         )}
         
         {isCalibrating && countdown === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-            <div className="text-white text-2xl font-bold">
-              Please show your hand clearly in frame...
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60">
+            <TextShimmerWave
+              className="text-2xl font-semibold mb-4 [--base-color:#ffffff] [--base-gradient-color:#60a5fa]"
+              duration={1.2}
+              spread={1.5}
+            >
+              Calibrating your hand...
+            </TextShimmerWave>
+            <div className="w-64 mt-4">
+              <Progress value={calibrationProgress} className="h-2" />
             </div>
+          </div>
+        )}
+        
+        {isProcessing && (
+          <div className="absolute top-4 right-4 bg-primary/20 px-3 py-2 rounded-md">
+            <TextShimmerWave
+              className="text-sm font-medium [--base-color:#ffffff] [--base-gradient-color:#60a5fa]"
+              duration={0.8}
+              spread={2}
+              zDistance={5}
+            >
+              Processing...
+            </TextShimmerWave>
           </div>
         )}
       </div>
       
-      <div className="mt-4">
+      <div className="mt-4 w-full">
         {!calibrationComplete ? (
           <ButtonCta
             label="Start Calibration"

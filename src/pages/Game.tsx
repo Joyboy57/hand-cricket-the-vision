@@ -6,9 +6,13 @@ import { useGame } from '@/lib/game-context';
 import { Waves } from '@/components/ui/waves-background';
 import { GooeyText } from '@/components/ui/gooey-text-morphing';
 import { ButtonCta } from '@/components/ui/button-shiny';
+import { Button } from '@/components/ui/button';
 import HandGestureDetector from '@/components/HandGestureDetector';
 import { useTheme } from 'next-themes';
 import { toast } from '@/hooks/use-toast';
+import { Pause, Info } from 'lucide-react';
+import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
+import PauseMenu from '@/components/PauseMenu';
 
 const Game = () => {
   const { user } = useAuth();
@@ -34,6 +38,9 @@ const Game = () => {
   const [countdown, setCountdown] = useState<number | null>(null);
   const [showHandDetector, setShowHandDetector] = useState(false);
   const [wonToss, setWonToss] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [aiThinking, setAiThinking] = useState(false);
 
   useEffect(() => {
     // If a choice was made, start countdown for next move
@@ -55,15 +62,23 @@ const Game = () => {
 
   const handleGestureDetected = (gesture: number) => {
     // Only accept gestures if we're not in countdown and the game is in progress
-    if (countdown === null && (gameState === 'batting' || gameState === 'bowling')) {
+    if (countdown === null && (gameState === 'batting' || gameState === 'bowling') && !isPaused) {
       if (gesture >= 1 && gesture <= 6) {
-        makeChoice(gesture);
-        // Add a visual feedback for the detected gesture
-        toast({
-          title: `Gesture detected: ${gesture}`,
-          description: gesture === 6 ? "Thumbs up! 👍" : `${gesture} finger${gesture > 1 ? 's' : ''}`,
-          duration: 1000,
-        });
+        // Show AI thinking animation
+        setAiThinking(true);
+        
+        // Add a slight delay for better UX
+        setTimeout(() => {
+          makeChoice(gesture);
+          setAiThinking(false);
+          
+          // Add a visual feedback for the detected gesture
+          toast({
+            title: `Gesture detected: ${gesture}`,
+            description: gesture === 6 ? "Thumbs up! 👍" : `${gesture} finger${gesture > 1 ? 's' : ''}`,
+            duration: 1000,
+          });
+        }, 600);
       }
     }
   };
@@ -83,12 +98,19 @@ const Game = () => {
     } else {
       // AI chooses randomly
       const aiChoice = Math.random() > 0.5;
-      toast({
-        title: "You lost the toss!",
-        description: `AI has chosen to ${aiChoice ? 'bowl' : 'bat'} first`,
-      });
-      startGame(!aiChoice); // !aiChoice because if AI bowls, user bats
-      setShowHandDetector(true);
+      
+      // Show AI thinking before decision
+      setAiThinking(true);
+      
+      setTimeout(() => {
+        toast({
+          title: "You lost the toss!",
+          description: `AI has chosen to ${aiChoice ? 'bowl' : 'bat'} first`,
+        });
+        startGame(!aiChoice); // !aiChoice because if AI bowls, user bats
+        setShowHandDetector(true);
+        setAiThinking(false);
+      }, 1500);
     }
   };
 
@@ -100,6 +122,24 @@ const Game = () => {
     toast({
       title: `You chose to ${isBatting ? 'bat' : 'bowl'} first`,
       description: "Get ready to play!",
+      variant: "success"
+    });
+  };
+  
+  // Pause game handlers
+  const handlePause = () => {
+    setIsPaused(true);
+  };
+  
+  const handleResume = () => {
+    setIsPaused(false);
+  };
+  
+  const handleToggleSound = () => {
+    setSoundEnabled(!soundEnabled);
+    toast({
+      title: soundEnabled ? "Sound disabled" : "Sound enabled",
+      duration: 1500,
     });
   };
 
@@ -115,7 +155,30 @@ const Game = () => {
         />
       </div>
       
+      {/* Pause Menu */}
+      <PauseMenu 
+        open={isPaused}
+        onOpenChange={setIsPaused}
+        onRestart={resetGame}
+        onResume={handleResume}
+        soundEnabled={soundEnabled}
+        onToggleSound={handleToggleSound}
+      />
+      
+      {/* Game content */}
       <div className="relative z-10 w-full max-w-4xl bg-background/60 backdrop-blur-sm rounded-xl p-6 shadow-xl">
+        {/* Pause button */}
+        <div className="absolute top-4 right-4">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={handlePause}
+            className="bg-background/80 hover:bg-background"
+          >
+            <Pause className="h-4 w-4" />
+          </Button>
+        </div>
+        
         {/* Game header */}
         <div className="mb-6 text-center">
           <h1 className="text-3xl font-bold mb-2">Cricket Hand Gesture Game</h1>
@@ -123,6 +186,23 @@ const Game = () => {
             Welcome {user?.name || 'Guest'} to Hand Cricket!
           </p>
         </div>
+        
+        {/* AI Thinking Overlay */}
+        {aiThinking && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
+            <div className="text-center">
+              <TextShimmerWave
+                className="text-2xl font-bold mb-2 [--base-color:#3b82f6] [--base-gradient-color:#60a5fa]"
+                duration={1.5}
+                spread={1.2}
+                zDistance={20}
+              >
+                AI is thinking...
+              </TextShimmerWave>
+              <p className="text-muted-foreground mt-2">Please wait while the AI makes its move</p>
+            </div>
+          </div>
+        )}
         
         {/* Game content */}
         <div className="flex flex-col md:flex-row gap-6">

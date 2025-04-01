@@ -10,6 +10,9 @@ export class MediaPipeService {
   private isCalibrating: boolean = true;
   private isReady: boolean = false;
   private calibrationData: { handSize: number; thumbIndexDist: number } | null = null;
+  private lastGestureDetected: number = 0;
+  private gestureConfidence: { [key: number]: number } = {};
+  private readonly gestureThreshold: number = 3; // Need to detect the same gesture multiple times
 
   constructor() {
     // The actual Hands and Camera initialization will happen when initialize() is called
@@ -105,8 +108,11 @@ export class MediaPipeService {
         // Only detect gestures if not calibrating
         else if (this.gestureCallback) {
           const gesture = this.detectImprovedGesture(landmarks);
+          
+          // Only trigger callback if we're confident about the gesture
           if (gesture > 0) {
-            this.gestureCallback(gesture);
+            // Implement confidence-based gesture detection
+            this.processGestureWithConfidence(gesture);
           }
         }
       }
@@ -142,6 +148,35 @@ export class MediaPipeService {
     };
   }
 
+  // Use confidence-based gesture detection to improve reliability
+  private processGestureWithConfidence(gesture: number): void {
+    // Reset confidence for other gestures
+    for (const key in this.gestureConfidence) {
+      if (parseInt(key) !== gesture) {
+        this.gestureConfidence[parseInt(key)] = 0;
+      }
+    }
+    
+    // Increment confidence for the current gesture
+    this.gestureConfidence[gesture] = (this.gestureConfidence[gesture] || 0) + 1;
+    
+    // If we've reached the threshold, trigger the callback
+    if (this.gestureConfidence[gesture] >= this.gestureThreshold && 
+        this.lastGestureDetected !== gesture) {
+      this.lastGestureDetected = gesture;
+      if (this.gestureCallback) {
+        this.gestureCallback(gesture);
+      }
+      
+      // Reset confidence after triggering
+      setTimeout(() => {
+        // Reset lastGestureDetected after a delay to allow for new gesture detection
+        this.lastGestureDetected = 0;
+        this.gestureConfidence = {};
+      }, 1000);
+    }
+  }
+
   private detectImprovedGesture(landmarks: any[]): number {
     // Improved gesture detection based on the Python reference code
     if (!landmarks || landmarks.length < 21) return 0;
@@ -173,19 +208,21 @@ export class MediaPipeService {
     const pinkyDIP = landmarks[19];
     const pinkyTip = landmarks[20];
     
+    // Calculate vectors and distances for better gesture recognition
+    // Vector from wrist to middle MCP (palm direction)
+    const palmX = middleMCP.x - wrist.x;
+    const palmY = middleMCP.y - wrist.y;
+    const palmZ = middleMCP.z - wrist.z;
+    
+    // Check thumb position
+    // For thumbs up gesture: thumb needs to be extended upwards and other fingers curled
+    const isThumbExtended = this.isThumbUp(thumbTip, thumbIP, wrist, indexMCP);
+    
     // Check if each finger is extended
-    // For this gesture recognition, we'll use y-coordinate comparison
-    // A finger is extended if its tip is higher (smaller y) than its PIP joint
-    
-    // Thumb is special - check if it's extended outward
-    // For right hand, extended thumb has smaller x than wrist
-    const isThumbExtended = thumbTip.x < wrist.x;
-    
-    // For fingers, extended means tip is higher (smaller y) than middle joint
-    const isIndexExtended = indexTip.y < indexPIP.y;
-    const isMiddleExtended = middleTip.y < middlePIP.y;
-    const isRingExtended = ringTip.y < ringPIP.y;
-    const isPinkyExtended = pinkyTip.y < pinkyPIP.y;
+    const isIndexExtended = this.isFingerExtended(indexTip, indexPIP, indexMCP);
+    const isMiddleExtended = this.isFingerExtended(middleTip, middlePIP, middleMCP);
+    const isRingExtended = this.isFingerExtended(ringTip, ringPIP, ringMCP);
+    const isPinkyExtended = this.isFingerExtended(pinkyTip, pinkyPIP, pinkyMCP);
     
     // Count extended fingers (excluding thumb)
     const extendedFingerCount = 
@@ -194,12 +231,17 @@ export class MediaPipeService {
       (isRingExtended ? 1 : 0) + 
       (isPinkyExtended ? 1 : 0);
     
+    // Debug output
+    console.log(`Fingers: Thumb: ${isThumbExtended}, Index: ${isIndexExtended}, Middle: ${isMiddleExtended}, Ring: ${isRingExtended}, Pinky: ${isPinkyExtended}`);
+    
     // Special case for thumbs up (gesture 6)
-    if (isThumbExtended && !isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended) {
+    // Thumb must be extended and all other fingers curled
+    if (isThumbExtended && extendedFingerCount === 0) {
       return 6;
     }
     
     // Special case for open hand (gesture 5)
+    // All fingers must be extended
     if (extendedFingerCount >= 4) {
       return 5;
     }
@@ -211,6 +253,35 @@ export class MediaPipeService {
     
     // Default - no recognized gesture
     return 0;
+  }
+  
+  // Helper method to check if thumb is in the "thumbs up" position
+  private isThumbUp(thumbTip: any, thumbIP: any, wrist: any, indexMCP: any): boolean {
+    // For thumbs up, the thumb should be pointing upward
+    // This means the y-coordinate of the thumb tip should be significantly lower than the thumb IP
+    const thumbYDiff = thumbIP.y - thumbTip.y;
+    
+    // Also thumb should be extended outward from the hand
+    // Compare the z-coordinate with the wrist to see if it's pointing toward the camera
+    const thumbZDiff = thumbTip.z - wrist.z;
+    
+    // Check if thumb is extended upward and forward
+    return thumbYDiff > 0.1 && Math.abs(thumbZDiff) < 0.1;
+  }
+  
+  // Helper method to check if a finger is extended
+  private isFingerExtended(tip: any, pip: any, mcp: any): boolean {
+    // A finger is extended if its tip is higher (smaller y) than its PIP joint
+    // and the horizontal distance from MCP is significant
+    const verticalDist = pip.y - tip.y;
+    const horizontalDist = Math.sqrt(
+      Math.pow(tip.x - mcp.x, 2) + 
+      Math.pow(tip.z - mcp.z, 2)
+    );
+    
+    // For a finger to be considered extended, it should be higher than the PIP joint
+    // and have some horizontal distance from the MCP joint
+    return verticalDist > 0.05 && horizontalDist > 0.05;
   }
 }
 
