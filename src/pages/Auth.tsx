@@ -9,11 +9,13 @@ import { Label } from "@/components/ui/label";
 import { GooeyText } from "@/components/ui/gooey-text-morphing";
 import { ChevronRight, Github } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/lib/auth";
 
 const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const { login, register } = useAuth();
   
   const [loginData, setLoginData] = useState({
     email: "",
@@ -34,34 +36,50 @@ const Auth = () => {
     setSignupData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate login process
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await login(loginData.email, loginData.password);
       toast({
         title: "Logged in successfully",
         description: "Welcome back!",
       });
       navigate('/game');
-    }, 1500);
+    } catch (error) {
+      toast({
+        title: "Login failed",
+        description: "Please check your credentials and try again.",
+        variant: "destructive"
+      });
+      console.error("Login error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate signup process
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await register(signupData.name, signupData.email, signupData.password);
       toast({
         title: "Account created",
         description: "Your account has been created successfully!",
       });
       navigate('/game');
-    }, 1500);
+    } catch (error) {
+      toast({
+        title: "Signup failed",
+        description: "Please check your information and try again.",
+        variant: "destructive"
+      });
+      console.error("Signup error:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleContinueWithoutLogin = () => {
@@ -74,7 +92,7 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-indigo-50 p-4">
-      <div className="h-[150px] w-full mb-6 overflow-hidden">
+      <div className="h-[200px] w-full mb-6 relative"> {/* Increased height from 150px to 200px */}
         <GooeyText
           texts={["Gesture", "Cricket", "Challenge", "Game"]}
           morphTime={1}
