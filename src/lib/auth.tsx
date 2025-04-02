@@ -1,12 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { createClient, SupabaseClient, User } from '@supabase/supabase-js';
-
-// Create a single supabase client for the app
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { User } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 
 type AuthUser = {
   id: string;
@@ -21,7 +16,7 @@ type AuthContextType = {
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  supabase: SupabaseClient;
+  supabase: typeof supabase;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -45,6 +40,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Check for existing session and user on initial render
   useEffect(() => {
+    // Set up auth state change listener FIRST
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session) {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', session.user.id)
+            .maybeSingle();
+            
+          setUser(transformUser(session.user, profileData?.name));
+        } else {
+          setUser(null);
+        }
+      }
+    );
+
+    // THEN check for existing session
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
@@ -54,7 +67,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             .from('profiles')
             .select('name')
             .eq('id', session.user.id)
-            .single();
+            .maybeSingle();
             
           setUser(transformUser(session.user, profileData?.name));
         } else {
@@ -70,23 +83,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsLoading(false);
       }
     };
-
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('name')
-            .eq('id', session.user.id)
-            .single();
-            
-          setUser(transformUser(session.user, profileData?.name));
-        } else {
-          setUser(null);
-        }
-      }
-    );
 
     checkSession();
 
@@ -110,37 +106,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     
     try {
-      // First try Supabase authentication
-      if (supabaseUrl && supabaseAnonKey) {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        
-        if (error) throw error;
-        
-        if (data.user) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('name')
-            .eq('id', data.user.id)
-            .single();
-            
-          const authUser = transformUser(data.user, profileData?.name);
-          setUser(authUser);
-          return;
-        }
-      } else {
-        // Fallback to localStorage for compatibility
-        const users = getUsers();
-        const foundUser = users.find(u => u.email === email && u.password === password);
-        
-        if (foundUser) {
-          const { password, ...userWithoutPassword } = foundUser;
-          setUser(userWithoutPassword);
-          localStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
-          return;
-        }
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) throw error;
+      
+      if (data.user) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', data.user.id)
+          .maybeSingle();
+          
+        const authUser = transformUser(data.user, profileData?.name);
+        setUser(authUser);
+        return;
       }
       
       throw new Error('Invalid email or password');
@@ -156,54 +138,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     
     try {
-      // First try Supabase registration
-      if (supabaseUrl && supabaseAnonKey) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              name,
-            },
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
           },
-        });
+        },
+      });
+      
+      if (error) throw error;
+      
+      if (data.user) {
+        // Create profile entry with name
+        await supabase.from('profiles').insert([
+          { id: data.user.id, name, email }
+        ]);
         
-        if (error) throw error;
-        
-        if (data.user) {
-          // Create profile entry with name
-          await supabase.from('profiles').insert([
-            { id: data.user.id, name, email }
-          ]);
-          
-          const authUser = transformUser(data.user, name);
-          setUser(authUser);
-          return;
-        }
-      } else {
-        // Fallback to localStorage for compatibility
-        const users = getUsers();
-        
-        // Check if email is already in use
-        if (users.some(u => u.email === email)) {
-          throw new Error('Email already in use');
-        }
-        
-        // Create new user
-        const newUser = {
-          id: Date.now().toString(),
-          name,
-          email,
-          password,
-        };
-        
-        // Save updated users list
-        saveUsers([...users, newUser]);
-        
-        // Log user in
-        const { password: _, ...userWithoutPassword } = newUser;
-        setUser(userWithoutPassword);
-        localStorage.setItem('currentUser', JSON.stringify(userWithoutPassword));
+        const authUser = transformUser(data.user, name);
+        setUser(authUser);
         return;
       }
       
@@ -220,9 +174,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsLoading(true);
     
     try {
-      if (supabaseUrl && supabaseAnonKey) {
-        await supabase.auth.signOut();
-      }
+      await supabase.auth.signOut();
       
       // Also clear localStorage for compatibility
       localStorage.removeItem('currentUser');
