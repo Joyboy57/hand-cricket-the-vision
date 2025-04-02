@@ -8,6 +8,7 @@ type TextShimmerWave = {
   children: string;
   as?: React.ElementType;
   className?: string;
+  textClassName?: string;
   duration?: number;
   zDistance?: number;
   xDistance?: number;
@@ -22,6 +23,7 @@ export function TextShimmerWave({
   children,
   as: Component = 'p',
   className,
+  textClassName,
   duration = 1,
   zDistance = 10,
   xDistance = 2,
@@ -31,9 +33,7 @@ export function TextShimmerWave({
   rotateYDistance = 10,
   transition,
 }: TextShimmerWave) {
-  const MotionComponent = motion.create(
-    Component as keyof JSX.IntrinsicElements
-  );
+  const MotionComponent = motion[Component as keyof typeof motion] || motion.p;
 
   return (
     <MotionComponent
@@ -52,7 +52,8 @@ export function TextShimmerWave({
           <motion.span
             key={i}
             className={cn(
-              'inline-block whitespace-pre [transform-style:preserve-3d]'
+              'inline-block whitespace-pre [transform-style:preserve-3d]',
+              textClassName
             )}
             initial={{
               translateZ: 0,

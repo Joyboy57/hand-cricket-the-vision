@@ -11,12 +11,16 @@ import { RefreshCw, Camera, CameraOff } from 'lucide-react';
 interface HandGestureDetectorProps {
   onGestureDetected: (gesture: number) => void;
   onCalibrationComplete?: () => void;
+  onCameraStatusChange?: (isActive: boolean) => void;
+  onProcessingChange?: (isProcessing: boolean) => void;
   disabled?: boolean;
 }
 
 const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ 
   onGestureDetected,
   onCalibrationComplete,
+  onCameraStatusChange,
+  onProcessingChange,
   disabled = false 
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -29,6 +33,8 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [cameraActive, setCameraActive] = useState(true);
   const calibrationLockRef = useRef<boolean>(true);
+  const calibrationTimeoutRef = useRef<number | null>(null);
+  const cameraTimeoutRef = useRef<number | null>(null);
   
   // Add gesture throttling to prevent too frequent updates
   const throttledGestureDetection = (gesture: number) => {
@@ -38,35 +44,66 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
     
     // Prevent first calibration gesture from being counted as game input
     if (calibrationLockRef.current) {
+      console.log("Gesture ignored due to calibration lock", gesture);
       return;
     }
     
-    // Only process gestures at most once per 500ms (faster response)
-    if (now - lastGestureTimeRef.current > 500 && gesture > 0) {
+    // Only process gestures at most once per 800ms (slower for better reliability)
+    if (now - lastGestureTimeRef.current > 800 && gesture > 0) {
       lastGestureTimeRef.current = now;
       setIsProcessing(true);
+      
+      if (onProcessingChange) {
+        onProcessingChange(true);
+      }
       
       // Simulate a quick "thinking" period for better user feedback
       setTimeout(() => {
         onGestureDetected(gesture);
         setIsProcessing(false);
-      }, 200);
+        
+        if (onProcessingChange) {
+          onProcessingChange(false);
+        }
+      }, 500);
     }
   };
 
   useEffect(() => {
     // Initialize MediaPipe when component mounts
     if (videoRef.current && canvasRef.current && cameraActive) {
-      mediaPipeService.initialize(
+      const initPromise = mediaPipeService.initialize(
         videoRef.current,
         canvasRef.current,
         throttledGestureDetection
       );
+      
+      // Set a timeout for camera initialization
+      cameraTimeoutRef.current = window.setTimeout(() => {
+        if (!mediaPipeService.isCameraRunning()) {
+          console.log("Camera initialization timeout - retrying");
+          handleRestartCamera();
+        }
+      }, 5000);
+      
+      // Notify parent about camera status
+      if (onCameraStatusChange) {
+        onCameraStatusChange(true);
+      }
     }
 
     return () => {
       // Clean up when component unmounts
       mediaPipeService.stopCamera();
+      
+      // Clear timeouts to prevent memory leaks
+      if (calibrationTimeoutRef.current) {
+        clearTimeout(calibrationTimeoutRef.current);
+      }
+      
+      if (cameraTimeoutRef.current) {
+        clearTimeout(cameraTimeoutRef.current);
+      }
     };
   }, [onGestureDetected, cameraActive]);
 
@@ -102,22 +139,22 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
                 setIsCalibrating(false);
                 setCalibrationComplete(true);
                 
-                // Wait for 2 seconds before allowing gestures to be counted
+                // Wait for 3 seconds before allowing gestures to be counted
                 // This prevents the calibration gesture from being counted as game input
-                setTimeout(() => {
+                calibrationTimeoutRef.current = window.setTimeout(() => {
                   calibrationLockRef.current = false;
                   
                   // Notify parent that calibration is complete
                   if (onCalibrationComplete) {
                     onCalibrationComplete();
                   }
-                }, 2000);
-                
-                toast({
-                  title: "Calibration complete",
-                  description: "You can now play. Show 1-5 fingers or thumbs up (6)",
-                  variant: "default"
-                });
+                  
+                  toast({
+                    title: "Calibration complete",
+                    description: "You can now play. Show 1-5 fingers or thumbs up (6)",
+                    variant: "default"
+                  });
+                }, 3000);
               }, 300);
             }
           }, 250);
@@ -136,6 +173,10 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
     // Toggle camera state to trigger re-initialization
     setCameraActive(false);
     
+    if (onCameraStatusChange) {
+      onCameraStatusChange(false);
+    }
+    
     // Small delay before restarting
     setTimeout(() => {
       setCameraActive(true);
@@ -148,6 +189,10 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
             canvasRef.current,
             throttledGestureDetection
           );
+          
+          if (onCameraStatusChange) {
+            onCameraStatusChange(true);
+          }
           
           toast({
             title: "Camera restarted",
@@ -212,7 +257,6 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
               className="text-sm font-medium [--base-color:#ffffff] [--base-gradient-color:#60a5fa]"
               duration={0.8}
               spread={2}
-              zDistance={5}
             >
               Processing...
             </TextShimmerWave>
@@ -239,7 +283,6 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
             label="Start Calibration"
             onClick={startCalibration}
             className="w-full"
-            icon={<Camera className="h-4 w-4" />}
           />
         ) : (
           <div className="bg-green-500/20 p-3 rounded-lg text-center">

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { GooeyText } from "@/components/ui/gooey-text-morphing";
 import { ChevronRight, Github } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/auth";
+import { RetroGrid } from "@/components/ui/retro-grid";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -91,8 +91,10 @@ const Auth = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-indigo-50 via-white to-indigo-50 p-4">
-      <div className="h-[200px] w-full mb-6 relative"> {/* Increased height from 150px to 200px */}
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <RetroGrid className="opacity-30" />
+      
+      <div className="h-[200px] w-full mb-6 relative z-10">
         <GooeyText
           texts={["Gesture", "Cricket", "Challenge", "Game"]}
           morphTime={1}
@@ -101,7 +103,7 @@ const Auth = () => {
         />
       </div>
       
-      <Card className="w-full max-w-md shadow-lg border-indigo-100">
+      <Card className="w-full max-w-md shadow-lg border-indigo-100 relative z-10">
         <CardHeader>
           <CardTitle className="text-2xl text-center">Welcome</CardTitle>
           <CardDescription className="text-center">
@@ -244,7 +246,7 @@ const Auth = () => {
         </div>
       </Card>
       
-      <p className="mt-8 text-center text-sm text-gray-500">
+      <p className="mt-8 text-center text-sm text-gray-500 relative z-10">
         By signing up, you agree to our <a href="#" className="font-medium text-indigo-600 hover:underline">Terms of Service</a> and <a href="#" className="font-medium text-indigo-600 hover:underline">Privacy Policy</a>.
       </p>
     </div>
