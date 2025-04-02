@@ -17,6 +17,7 @@ type GameContextType = {
   userBatting: boolean;
   isOut: boolean;
   tossResult: string | null;
+  ballsPlayed: number;
   startGame: (battingFirst: boolean) => void;
   resetGame: () => void;
   makeChoice: (userMove: number) => void;
@@ -36,6 +37,7 @@ const initialState = {
   userBatting: false,
   isOut: false,
   tossResult: null,
+  ballsPlayed: 0,
 };
 
 // Create context
@@ -53,6 +55,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [aiChoice, setAiChoice] = useState<number | null>(null);
   const [isOut, setIsOut] = useState(false);
   const [tossResult, setTossResult] = useState<string | null>(null);
+  const [ballsPlayed, setBallsPlayed] = useState(0);
 
   // Reset game state
   const resetGame = () => {
@@ -66,6 +69,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAiChoice(null);
     setIsOut(false);
     setTossResult(null);
+    setBallsPlayed(0);
   };
 
   // Handle user move
@@ -77,6 +81,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const aiMove = generateAiMove();
     setPlayerChoice(userMove);
     setAiChoice(aiMove);
+    
+    // Increment balls played
+    setBallsPlayed(prev => prev + 1);
 
     // Check if out
     if (isPlayerOut(userMove, aiMove)) {
@@ -180,6 +187,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const startGame = (battingFirst: boolean) => {
     setUserBatting(battingFirst);
     setGameState(battingFirst ? 'batting' : 'bowling');
+    setBallsPlayed(0); // Reset balls played at the start of the game
     
     // Clear any previous choices when starting a new game
     setPlayerChoice(null);
@@ -224,6 +232,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         userBatting,
         isOut,
         tossResult,
+        ballsPlayed,
         startGame,
         resetGame,
         makeChoice,

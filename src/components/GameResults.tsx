@@ -1,11 +1,12 @@
 
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ButtonCta } from '@/components/ui/button-shiny';
-import { Button } from '@/components/ui/button';
-import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
-import { Home, RotateCw } from 'lucide-react';
+import { ButtonCta } from '@/components/ui/button-shiny';
+import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
+import { getResultMessage } from '@/lib/game-utils';
+import { RetroGrid } from '@/components/ui/retro-grid';
 
 interface GameResultsProps {
   isGameOver: boolean;
@@ -22,128 +23,103 @@ const GameResults: React.FC<GameResultsProps> = ({
   playerScore,
   aiScore,
   target,
-  onRestartGame
+  onRestartGame,
 }) => {
   const navigate = useNavigate();
   
+  // Determine result message for game over
+  const resultMessage = isGameOver
+    ? getResultMessage(playerScore, aiScore)
+    : "First innings complete!";
+
   const handleHomeClick = () => {
     navigate('/');
   };
-  
-  // First innings completed announcement
-  if (isFirstInningsOver && !isGameOver) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-card/90 backdrop-blur-sm p-8 rounded-lg">
-        <div className="text-center mb-6">
-          <TextShimmerWave
-            className="text-3xl font-bold mb-4 [--base-color:#3b82f6] [--base-gradient-color:#60a5fa]"
-            duration={1.5}
-            spread={1.2}
-          >
-            Innings Complete!
-          </TextShimmerWave>
-          
-          <p className="text-xl font-medium mb-2">
-            {target ? "Your" : "AI's"} innings has ended
-          </p>
-          
-          <div className="flex items-center justify-center gap-4 my-6">
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Target Score</p>
-              <div className="flex justify-center">
-                <AnimatedCounter value={target || 0} />
-              </div>
-            </div>
+
+  return (
+    <div className="relative w-full max-w-lg p-6 bg-card/95 backdrop-blur-sm rounded-xl shadow-xl overflow-hidden">
+      {/* Background effect */}
+      <div className="absolute inset-0 -z-10">
+        <RetroGrid angle={55} />
+      </div>
+      
+      <div className="text-center mb-6">
+        <h2 className="text-2xl font-bold mb-2">
+          {isGameOver ? (
+            <TextShimmerWave
+              className="text-2xl font-bold [--base-color:#0D74CE] [--base-gradient-color:#5EB1EF]"
+              duration={2}
+              spread={1.5}
+            >
+              Game Over!
+            </TextShimmerWave>
+          ) : (
+            <TextShimmerWave
+              className="text-2xl font-bold [--base-color:#0D74CE] [--base-gradient-color:#5EB1EF]"
+              duration={2}
+              spread={1.5}
+            >
+              Innings Complete!
+            </TextShimmerWave>
+          )}
+        </h2>
+        <p className="text-muted-foreground">
+          {isFirstInningsOver && !isGameOver
+            ? "Get ready for the second innings!"
+            : resultMessage}
+        </p>
+      </div>
+      
+      {/* Score display */}
+      <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="bg-background/80 p-4 rounded-lg text-center">
+          <h3 className="text-lg font-medium mb-2">Your Score</h3>
+          <div className="flex justify-center">
+            <AnimatedCounter value={playerScore} />
           </div>
-          
-          <p className="text-muted-foreground mb-6">
-            {target 
-              ? `You need to defend ${target} runs` 
-              : `You need to score ${aiScore + 1} runs to win`
-            }
-          </p>
         </div>
-        
+        <div className="bg-background/80 p-4 rounded-lg text-center">
+          <h3 className="text-lg font-medium mb-2">AI Score</h3>
+          <div className="flex justify-center">
+            <AnimatedCounter value={aiScore} />
+          </div>
+        </div>
+      </div>
+      
+      {/* Target information */}
+      {isFirstInningsOver && !isGameOver && target && (
+        <div className="bg-primary/10 p-4 rounded-lg text-center mb-6">
+          <div className="font-medium text-primary">
+            Target to {playerScore > aiScore ? "Defend" : "Chase"}: {target}
+          </div>
+          <div className="text-sm text-muted-foreground mt-1">
+            {playerScore > aiScore
+              ? "AI needs to score this many runs to win"
+              : "You need to score this many runs to win"}
+          </div>
+        </div>
+      )}
+      
+      {/* Actions */}
+      <div className="flex flex-col gap-3">
         <ButtonCta
-          label="Continue to Next Innings"
+          label={isGameOver ? "Play Again" : "Continue to Next Innings"}
           onClick={onRestartGame}
-          className="w-64"
+          className="w-full"
         />
-      </div>
-    );
-  }
-  
-  // Game over announcement
-  if (isGameOver) {
-    const playerWon = playerScore > aiScore;
-    const isTie = playerScore === aiScore;
-    
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-card/90 backdrop-blur-sm p-8 rounded-lg">
-        <div className="text-center mb-6">
-          <TextShimmerWave
-            className={`text-3xl font-bold mb-4 ${
-              playerWon 
-                ? "[--base-color:#10b981] [--base-gradient-color:#34d399]" 
-                : isTie
-                  ? "[--base-color:#f59e0b] [--base-gradient-color:#fbbf24]"
-                  : "[--base-color:#ef4444] [--base-gradient-color:#f87171]"
-            }`}
-            duration={1.5}
-            spread={1.2}
-          >
-            {playerWon ? "You Won!" : isTie ? "It's a Tie!" : "AI Won!"}
-          </TextShimmerWave>
-          
-          <div className="flex items-center justify-center gap-8 my-6">
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">Your Score</p>
-              <div className="flex justify-center">
-                <AnimatedCounter value={playerScore} />
-              </div>
-            </div>
-            
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground mb-1">AI Score</p>
-              <div className="flex justify-center">
-                <AnimatedCounter value={aiScore} />
-              </div>
-            </div>
-          </div>
-          
-          <p className="text-muted-foreground mb-6">
-            {playerWon 
-              ? `Congratulations! You won by ${playerScore - aiScore} runs.` 
-              : isTie 
-                ? "What a match! It ended in a tie."
-                : `Better luck next time. AI won by ${aiScore - playerScore} runs.`
-            }
-          </p>
-        </div>
         
-        <div className="flex gap-4">
-          <Button 
-            variant="outline" 
-            size="lg" 
+        {isGameOver && (
+          <Button
+            variant="outline"
             onClick={handleHomeClick}
-            className="flex items-center gap-2"
+            className="w-full"
           >
-            <Home className="w-4 h-4" />
-            Home
+            Return to Home Screen
           </Button>
-          
-          <ButtonCta
-            label="Play Again"
-            onClick={onRestartGame}
-            className="w-40"
-            icon={<RotateCw className="w-4 h-4" />}
-          />
-        </div>
+        )}
       </div>
-    );
-  }
-  
-  return null;
+    </div>
+  );
 };
 
 export default GameResults;

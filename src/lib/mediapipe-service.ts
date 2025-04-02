@@ -12,16 +12,18 @@ export class MediaPipeService {
   private calibrationData: { handSize: number; thumbIndexDist: number } | null = null;
   private lastGestureDetected: number = 0;
   private gestureConfidence: { [key: number]: number } = {};
-  private readonly gestureThreshold: number = 4; // Increased threshold for more reliability
+  private readonly gestureThreshold: number = 3; // Lowered threshold to detect gestures faster
   private cameraStartAttempts: number = 0;
   private maxCameraAttempts: number = 5;
   private lastFrameProcessed: number = 0;
-  private processingFrameRate: number = 10; // Process at most 10 frames per second for better performance
+  private processingFrameRate: number = 15; // Increased process rate for more responsive detection
   private stuckDetectionTimer: number | null = null;
   private lastLandmarkTime: number = 0;
   private noLandmarksTimeout: number | null = null;
   private isCameraRunningFlag: boolean = false;
   private restartInProgress: boolean = false;
+  private consecutiveFailedFrames: number = 0;
+  private maxConsecutiveFailedFrames: number = 10;
 
   constructor() {
     // The actual Hands and Camera initialization will happen when initialize() is called
@@ -50,11 +52,11 @@ export class MediaPipeService {
       }
     });
 
-    // Optimize for performance over accuracy for smoother experience
+    // Optimize for better reliability
     this.hands.setOptions({
       maxNumHands: 1,
       modelComplexity: 1, // Use medium complexity for better detection
-      minDetectionConfidence: 0.6, // Higher threshold for more reliable detection
+      minDetectionConfidence: 0.5, // Lower threshold for more reliable detection
       minTrackingConfidence: 0.5
     });
 
@@ -76,6 +78,7 @@ export class MediaPipeService {
   private async initializeCamera(): Promise<boolean> {
     try {
       this.cameraStartAttempts++;
+      this.consecutiveFailedFrames = 0;
       
       if (this.videoElement) {
         this.camera = new window.Camera(this.videoElement, {
@@ -87,8 +90,17 @@ export class MediaPipeService {
               if (this.videoElement && this.hands) {
                 try {
                   await this.hands.send({ image: this.videoElement });
+                  // Reset failed frames counter on success
+                  this.consecutiveFailedFrames = 0;
                 } catch (err) {
                   console.error("Error sending frame to MediaPipe:", err);
+                  this.consecutiveFailedFrames++;
+                  
+                  // If too many consecutive failed frames, try to restart
+                  if (this.consecutiveFailedFrames >= this.maxConsecutiveFailedFrames && !this.restartInProgress) {
+                    console.log("Too many consecutive failed frames, attempting to restart camera");
+                    this.restartCamera();
+                  }
                 }
               }
             }
@@ -136,6 +148,10 @@ export class MediaPipeService {
   
   public isCameraRunning(): boolean {
     return this.isCameraRunningFlag;
+  }
+  
+  public isInitialized(): boolean {
+    return this.isReady;
   }
   
   private setupStuckDetection(): void {
@@ -194,10 +210,6 @@ export class MediaPipeService {
       this.isCalibrating = false;
       console.log("Calibration completed");
     }, 5000);
-  }
-
-  public isInitialized(): boolean {
-    return this.isReady;
   }
 
   public stopCamera(): void {
@@ -317,7 +329,7 @@ export class MediaPipeService {
     };
   }
 
-  // Improved confidence-based gesture detection
+  // Improved confidence-based gesture detection with faster response time
   private processGestureWithConfidence(gesture: number): void {
     // Reset confidence for other gestures
     for (const key in this.gestureConfidence) {

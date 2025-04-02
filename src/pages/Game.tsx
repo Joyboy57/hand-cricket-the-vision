@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -31,6 +30,7 @@ const Game = () => {
     aiChoice,
     userBatting,
     isOut,
+    ballsPlayed,
     startGame,
     makeChoice,
     resetGame,
@@ -46,9 +46,9 @@ const Game = () => {
   const [showInningsEnd, setShowInningsEnd] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
   const [calibrationComplete, setCalibrationComplete] = useState(false);
+  const [autoGestureTimer, setAutoGestureTimer] = useState<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // If a choice was made, start countdown for next move
     if (playerChoice !== null && aiChoice !== null) {
       setCountdown(3);
       const timer = setInterval(() => {
@@ -65,39 +65,66 @@ const Game = () => {
     }
   }, [playerChoice, aiChoice]);
   
-  // Watch for innings changes and game over
   useEffect(() => {
     if (innings === 2 && target !== null && !showInningsEnd) {
-      // First innings just ended
       setShowInningsEnd(true);
     }
     
     if (gameState === 'gameOver' && !showGameOver) {
-      // Game is over
       setShowGameOver(true);
     }
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
-  const handleGestureDetected = (gesture: number) => {
-    // Only accept gestures if calibration is complete, we're not in countdown, 
-    // and the game is in progress
+  useEffect(() => {
     if (calibrationComplete && 
-        countdown === null && 
+        (gameState === 'batting' || gameState === 'bowling') && 
+        !isPaused && 
+        !showInningsEnd && 
+        !showGameOver &&
+        playerChoice === null &&
+        aiChoice === null) {
+      
+      if (autoGestureTimer) {
+        clearInterval(autoGestureTimer);
+      }
+      
+      const timer = setInterval(() => {
+        setCountdown(prev => {
+          if (prev === null) return 3;
+          if (prev <= 1) {
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      setAutoGestureTimer(timer);
+      
+      return () => {
+        if (timer) clearInterval(timer);
+      };
+    } else if (playerChoice !== null || isPaused || showInningsEnd || showGameOver) {
+      if (autoGestureTimer) {
+        clearInterval(autoGestureTimer);
+        setAutoGestureTimer(null);
+      }
+    }
+  }, [calibrationComplete, gameState, isPaused, showInningsEnd, showGameOver, playerChoice, aiChoice]);
+
+  const handleGestureDetected = (gesture: number) => {
+    if (calibrationComplete && 
         (gameState === 'batting' || gameState === 'bowling') && 
         !isPaused && 
         !showInningsEnd && 
         !showGameOver) {
       
       if (gesture >= 1 && gesture <= 6) {
-        // Show AI thinking animation
         setAiThinking(true);
         
-        // Add a slight delay for better UX
         setTimeout(() => {
           makeChoice(gesture);
           setAiThinking(false);
           
-          // Add a visual feedback for the detected gesture
           toast({
             title: `Gesture detected: ${gesture}`,
             description: gesture === 6 ? "Thumbs up! 👍" : `${gesture} finger${gesture > 1 ? 's' : ''}`,
@@ -112,7 +139,6 @@ const Game = () => {
     setCalibrationComplete(true);
   };
 
-  // Handle toss outcome and let user choose
   const handleTossChoice = (choice: 'heads' | 'tails') => {
     const random = Math.random() > 0.5 ? 'heads' : 'tails';
     const won = random === choice;
@@ -125,10 +151,8 @@ const Game = () => {
         variant: "default"
       });
     } else {
-      // AI chooses randomly
       const aiChoice = Math.random() > 0.5;
       
-      // Show AI thinking before decision
       setAiThinking(true);
       
       setTimeout(() => {
@@ -136,14 +160,13 @@ const Game = () => {
           title: "You lost the toss!",
           description: `AI has chosen to ${aiChoice ? 'bowl' : 'bat'} first`,
         });
-        startGame(!aiChoice); // !aiChoice because if AI bowls, user bats
+        startGame(!aiChoice);
         setShowHandDetector(true);
         setAiThinking(false);
       }, 1500);
     }
   };
 
-  // Handle user's choice after winning toss
   const handleBatBowlChoice = (isBatting: boolean) => {
     startGame(isBatting);
     setShowHandDetector(true);
@@ -154,13 +177,11 @@ const Game = () => {
       variant: "default"
     });
   };
-  
-  // Handle continuing after first innings
+
   const handleContinueToNextInnings = () => {
     setShowInningsEnd(false);
   };
-  
-  // Handle restarting the game
+
   const handleRestartGame = () => {
     resetGame();
     setShowInningsEnd(false);
@@ -168,16 +189,15 @@ const Game = () => {
     setShowHandDetector(false);
     setCalibrationComplete(false);
   };
-  
-  // Pause game handlers
+
   const handlePause = () => {
     setIsPaused(true);
   };
-  
+
   const handleResume = () => {
     setIsPaused(false);
   };
-  
+
   const handleToggleSound = () => {
     setSoundEnabled(!soundEnabled);
     toast({
@@ -188,7 +208,6 @@ const Game = () => {
 
   return (
     <div className="relative min-h-screen w-full bg-background flex flex-col items-center justify-center p-4">
-      {/* Background waves */}
       <div className="absolute inset-0 z-0">
         <Waves
           lineColor={theme === "dark" ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"}
@@ -198,7 +217,6 @@ const Game = () => {
         />
       </div>
       
-      {/* Pause Menu */}
       <PauseMenu 
         open={isPaused}
         onOpenChange={setIsPaused}
@@ -208,9 +226,7 @@ const Game = () => {
         onToggleSound={handleToggleSound}
       />
       
-      {/* Game content */}
       <div className="relative z-10 w-full max-w-4xl bg-background/60 backdrop-blur-sm rounded-xl p-6 shadow-xl">
-        {/* Pause button */}
         <div className="absolute top-4 right-4">
           <Button 
             variant="outline" 
@@ -222,10 +238,14 @@ const Game = () => {
           </Button>
         </div>
         
-        {/* Game header */}
-        <GameHeader gameState={gameState} userName={user?.name} />
+        <GameHeader 
+          gameState={gameState} 
+          userName={user?.name} 
+          isCalibrating={!calibrationComplete && showHandDetector}
+          isProcessingGesture={aiThinking}
+          isCamera={showHandDetector}
+        />
         
-        {/* AI Thinking Overlay */}
         {aiThinking && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
             <div className="text-center">
@@ -242,7 +262,6 @@ const Game = () => {
           </div>
         )}
         
-        {/* Innings End or Game Over Overlay */}
         {(showInningsEnd || showGameOver) && (
           <div className="absolute inset-0 z-50 flex items-center justify-center">
             <GameResults 
@@ -256,23 +275,25 @@ const Game = () => {
           </div>
         )}
         
-        {/* Game content */}
         <div className="flex flex-col md:flex-row gap-6">
-          {/* Left side - Controls and info */}
           <div className="flex-1 flex flex-col gap-4">
-            {/* Score display with animated counters */}
-            <ScoreDisplay playerScore={playerScore} aiScore={aiScore} />
+            <ScoreDisplay 
+              playerScore={playerScore} 
+              aiScore={aiScore} 
+              target={target} 
+              innings={innings} 
+            />
             
-            {/* Game info */}
             <GameInfo 
               innings={innings} 
               target={target} 
               playerChoice={playerChoice} 
               aiChoice={aiChoice} 
               isOut={isOut} 
+              userBatting={userBatting}
+              ballsPlayed={ballsPlayed}
             />
             
-            {/* Game controls */}
             <GameControls 
               gameState={gameState}
               wonToss={wonToss}
@@ -285,7 +306,6 @@ const Game = () => {
             />
           </div>
           
-          {/* Right side - Hand gesture detector */}
           <div className="flex-1">
             {showHandDetector ? (
               <HandGestureDetector 

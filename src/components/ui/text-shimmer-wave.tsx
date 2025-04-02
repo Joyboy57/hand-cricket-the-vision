@@ -1,91 +1,84 @@
 
-'use client';
-import { type JSX } from 'react';
-import { motion, Transition } from 'framer-motion';
-import { cn } from '@/lib/utils';
+"use client";
 
-type TextShimmerWave = {
-  children: string;
-  as?: React.ElementType;
+import React, { useRef, useEffect } from "react";
+import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
+import { cn } from "@/lib/utils";
+
+export type TextShimmerProps = {
+  children: React.ReactNode;
   className?: string;
   textClassName?: string;
   duration?: number;
-  zDistance?: number;
-  xDistance?: number;
-  yDistance?: number;
   spread?: number;
-  scaleDistance?: number;
-  rotateYDistance?: number;
-  transition?: Transition;
+  zDistance?: number;
 };
 
 export function TextShimmerWave({
   children,
-  as: Component = 'p',
   className,
   textClassName,
-  duration = 1,
+  duration = 2,
+  spread = 2,
   zDistance = 10,
-  xDistance = 2,
-  yDistance = -2,
-  spread = 1,
-  scaleDistance = 1.1,
-  rotateYDistance = 10,
-  transition,
-}: TextShimmerWave) {
-  const MotionComponent = motion[Component as keyof typeof motion] || motion.p;
+}: TextShimmerProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const progress = useMotionValue(0);
+  const springConfig = { damping: 20, stiffness: 200 };
+  const springProgress = useSpring(progress, springConfig);
+
+  // Dynamically create the gradient stops
+  const baseColor = "var(--base-color, currentColor)";
+  const gradientColor = "var(--base-gradient-color, white)";
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      progress.set(Math.random());
+    }, duration * 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [duration, progress]);
 
   return (
-    <MotionComponent
+    <div
+      ref={ref}
       className={cn(
-        'relative inline-block [perspective:500px]',
-        '[--base-color:#a1a1aa] [--base-gradient-color:#000]',
-        'dark:[--base-color:#71717a] dark:[--base-gradient-color:#ffffff]',
+        "isolate flex items-center justify-center overflow-hidden",
         className
       )}
-      style={{ color: 'var(--base-color)' }}
     >
-      {children.split('').map((char, i) => {
-        const delay = (i * duration * (1 / spread)) / children.length;
-
-        return (
-          <motion.span
-            key={i}
-            className={cn(
-              'inline-block whitespace-pre [transform-style:preserve-3d]',
-              textClassName
-            )}
-            initial={{
-              translateZ: 0,
-              scale: 1,
-              rotateY: 0,
-              color: 'var(--base-color)',
-            }}
-            animate={{
-              translateZ: [0, zDistance, 0],
-              translateX: [0, xDistance, 0],
-              translateY: [0, yDistance, 0],
-              scale: [1, scaleDistance, 1],
-              rotateY: [0, rotateYDistance, 0],
-              color: [
-                'var(--base-color)',
-                'var(--base-gradient-color)',
-                'var(--base-color)',
-              ],
-            }}
-            transition={{
-              duration: duration,
-              repeat: Infinity,
-              repeatDelay: (children.length * 0.05) / spread,
-              delay,
-              ease: 'easeInOut',
-              ...transition,
-            }}
-          >
-            {char}
-          </motion.span>
-        );
-      })}
-    </MotionComponent>
+      <motion.div
+        className={cn("relative", textClassName)}
+        style={{
+          color: baseColor,
+        }}
+      >
+        {children}
+        <motion.span
+          className="absolute inset-0 whitespace-nowrap overflow-hidden"
+          style={{
+            color: gradientColor,
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            WebkitMaskImage: `linear-gradient(
+              to right,
+              transparent,
+              black ${spread * 15}%,
+              black ${100 - spread * 15}%,
+              transparent
+            )`,
+            transform: useTransform(
+              springProgress,
+              [0, 1],
+              ["translateX(-35%)", "translateX(135%)"]
+            ),
+          }}
+        >
+          {children}
+        </motion.span>
+      </motion.div>
+    </div>
   );
 }

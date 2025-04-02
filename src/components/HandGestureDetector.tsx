@@ -35,6 +35,8 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   const calibrationLockRef = useRef<boolean>(true);
   const calibrationTimeoutRef = useRef<number | null>(null);
   const cameraTimeoutRef = useRef<number | null>(null);
+  const restartAttemptsRef = useRef<number>(0);
+  const lastDetectedGestureRef = useRef<number>(0);
   
   // Add gesture throttling to prevent too frequent updates
   const throttledGestureDetection = (gesture: number) => {
@@ -46,6 +48,11 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
     if (calibrationLockRef.current) {
       console.log("Gesture ignored due to calibration lock", gesture);
       return;
+    }
+    
+    // Store the last detected gesture
+    if (gesture > 0) {
+      lastDetectedGestureRef.current = gesture;
     }
     
     // Only process gestures at most once per 800ms (slower for better reliability)
@@ -106,6 +113,30 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
       }
     };
   }, [onGestureDetected, cameraActive]);
+
+  // Add a watchdog effect to check if camera is frozen or stuck
+  useEffect(() => {
+    const cameraWatchdog = setInterval(() => {
+      if (cameraActive && mediaPipeService.isInitialized() && !mediaPipeService.isCameraRunning()) {
+        console.log("Camera watchdog detected non-running camera, restarting");
+        if (restartAttemptsRef.current < 5) {
+          restartAttemptsRef.current++;
+          handleRestartCamera();
+        } else {
+          // Too many restart attempts, notify user
+          toast({
+            title: "Camera issues detected",
+            description: "Please try refreshing the page or check your camera permissions",
+            variant: "destructive"
+          });
+        }
+      }
+    }, 10000); // Check every 10 seconds
+    
+    return () => {
+      clearInterval(cameraWatchdog);
+    };
+  }, [cameraActive]);
 
   const startCalibration = () => {
     setIsCalibrating(true);

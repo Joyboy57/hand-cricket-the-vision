@@ -9,6 +9,7 @@ interface GameInfoProps {
   aiChoice: number | null;
   isOut: boolean;
   userBatting: boolean;
+  ballsPlayed: number;
 }
 
 const GameInfo: React.FC<GameInfoProps> = ({ 
@@ -17,8 +18,16 @@ const GameInfo: React.FC<GameInfoProps> = ({
   playerChoice, 
   aiChoice, 
   isOut,
-  userBatting
+  userBatting,
+  ballsPlayed
 }) => {
+  // Format balls played as cricket-style overs (e.g., 1.3 means 1 over and 3 balls)
+  const formatOvers = (balls: number): string => {
+    const overs = Math.floor(balls / 6);
+    const remainingBalls = balls % 6;
+    return `${overs}.${remainingBalls}`;
+  };
+
   return (
     <div className="bg-background/80 p-4 rounded-lg mb-4">
       <h3 className="text-lg font-medium mb-2">Game Info</h3>
@@ -33,6 +42,8 @@ const GameInfo: React.FC<GameInfoProps> = ({
         </div>
         <div>Your choice: {playerChoice !== null ? (playerChoice === 6 ? '👍' : playerChoice) : '-'}</div>
         <div>AI choice: {aiChoice !== null ? (aiChoice === 6 ? '👍' : aiChoice) : '-'}</div>
+        <div className="font-medium">Overs: {formatOvers(ballsPlayed)}</div>
+        <div>Status: {userBatting ? "Batting" : "Bowling"}</div>
         
         {isOut && (
           <div className="col-span-2 p-2 bg-destructive/10 rounded mt-1 text-destructive font-medium">
