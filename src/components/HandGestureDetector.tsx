@@ -10,11 +10,13 @@ import { RefreshCw, Camera, CameraOff } from 'lucide-react';
 
 interface HandGestureDetectorProps {
   onGestureDetected: (gesture: number) => void;
+  onCalibrationComplete?: () => void;
   disabled?: boolean;
 }
 
 const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ 
   onGestureDetected,
+  onCalibrationComplete,
   disabled = false 
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -26,12 +28,19 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   const lastGestureTimeRef = useRef<number>(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [cameraActive, setCameraActive] = useState(true);
+  const calibrationLockRef = useRef<boolean>(true);
   
   // Add gesture throttling to prevent too frequent updates
   const throttledGestureDetection = (gesture: number) => {
     if (disabled) return;
     
     const now = Date.now();
+    
+    // Prevent first calibration gesture from being counted as game input
+    if (calibrationLockRef.current) {
+      return;
+    }
+    
     // Only process gestures at most once per 500ms (faster response)
     if (now - lastGestureTimeRef.current > 500 && gesture > 0) {
       lastGestureTimeRef.current = now;
@@ -65,6 +74,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
     setIsCalibrating(true);
     setCalibrationComplete(false);
     setCountdown(5);
+    calibrationLockRef.current = true;
     
     // Start the countdown
     const timer = setInterval(() => {
@@ -91,10 +101,22 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
               setTimeout(() => {
                 setIsCalibrating(false);
                 setCalibrationComplete(true);
+                
+                // Wait for 2 seconds before allowing gestures to be counted
+                // This prevents the calibration gesture from being counted as game input
+                setTimeout(() => {
+                  calibrationLockRef.current = false;
+                  
+                  // Notify parent that calibration is complete
+                  if (onCalibrationComplete) {
+                    onCalibrationComplete();
+                  }
+                }, 2000);
+                
                 toast({
                   title: "Calibration complete",
                   description: "You can now play. Show 1-5 fingers or thumbs up (6)",
-                  variant: "success"
+                  variant: "default"
                 });
               }, 300);
             }

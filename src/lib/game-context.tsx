@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { generateAiMove, isPlayerOut, isGameOver } from './game-utils';
 
 // Game state types
 export type GameState = 'toss' | 'batting' | 'bowling' | 'gameOver';
@@ -67,11 +68,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setTossResult(null);
   };
 
-  // Generate AI move (1-6)
-  const generateAiMove = (): number => {
-    return Math.floor(Math.random() * 6) + 1;
-  };
-
   // Handle user move
   const makeChoice = (userMove: number) => {
     if (userMove < 1 || userMove > 6) {
@@ -83,58 +79,76 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setAiChoice(aiMove);
 
     // Check if out
-    if (userMove === aiMove) {
-      setIsOut(true);
-      
-      if (userBatting) {
-        // User was batting and got out
-        if (target === null) {
-          // First innings, set target for AI
-          setTarget(playerScore + 1);
-          setUserBatting(false);
-          setIsOut(false);
-          setGameState('bowling');
-          setInnings(2);
-          
-          // Small delay to let the OUT! message be seen
-          setTimeout(() => {
-            setPlayerChoice(null);
-            setAiChoice(null);
-          }, 1500);
-        } else {
-          // Second innings, game over
-          setGameState('gameOver');
-        }
-      } else {
-        // AI was batting and got out
-        if (target === null) {
-          // First innings, set target for user
-          setTarget(aiScore + 1);
-          setUserBatting(true);
-          setIsOut(false);
-          setGameState('batting');
-          setInnings(2);
-          
-          // Small delay to let the OUT! message be seen
-          setTimeout(() => {
-            setPlayerChoice(null);
-            setAiChoice(null);
-          }, 1500);
-        } else {
-          // Second innings, game over
-          setGameState('gameOver');
-        }
-      }
+    if (isPlayerOut(userMove, aiMove)) {
+      handlePlayerOut();
       return;
     }
 
     // Not out, update scores
+    updateScores(userMove, aiMove);
+  };
+
+  // Handle player out scenario
+  const handlePlayerOut = () => {
+    setIsOut(true);
+    
+    if (userBatting) {
+      handleBattingPlayerOut();
+    } else {
+      handleBowlingPlayerOut();
+    }
+  };
+
+  // Handle batting player out
+  const handleBattingPlayerOut = () => {
+    if (target === null) {
+      // First innings, set target for AI
+      setTarget(playerScore + 1);
+      setUserBatting(false);
+      setIsOut(false);
+      setGameState('bowling');
+      setInnings(2);
+      
+      // Small delay to let the OUT! message be seen
+      setTimeout(() => {
+        setPlayerChoice(null);
+        setAiChoice(null);
+      }, 1500);
+    } else {
+      // Second innings, game over
+      setGameState('gameOver');
+    }
+  };
+
+  // Handle bowling player out
+  const handleBowlingPlayerOut = () => {
+    if (target === null) {
+      // First innings, set target for user
+      setTarget(aiScore + 1);
+      setUserBatting(true);
+      setIsOut(false);
+      setGameState('batting');
+      setInnings(2);
+      
+      // Small delay to let the OUT! message be seen
+      setTimeout(() => {
+        setPlayerChoice(null);
+        setAiChoice(null);
+      }, 1500);
+    } else {
+      // Second innings, game over
+      setGameState('gameOver');
+    }
+  };
+
+  // Update scores based on player and AI choices
+  const updateScores = (userMove: number, aiMove: number) => {
     if (userBatting) {
       const newScore = playerScore + userMove;
       setPlayerScore(newScore);
       
       // Check if target achieved in second innings
-      if (target !== null && newScore >= target) {
+      if (isGameOver(innings, newScore, target)) {
         setGameState('gameOver');
       } else {
         // Reset choices after a short delay
@@ -149,7 +163,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setAiScore(newScore);
       
       // Check if target achieved in second innings
-      if (target !== null && newScore >= target) {
+      if (isGameOver(innings, newScore, target)) {
         setGameState('gameOver');
       } else {
         // Reset choices after a short delay

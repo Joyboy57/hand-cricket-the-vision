@@ -135,8 +135,8 @@ const GameResults: React.FC<GameResultsProps> = ({
           <ButtonCta
             label="Play Again"
             onClick={onRestartGame}
-            icon={<RotateCw className="w-4 h-4" />}
             className="w-40"
+            icon={<RotateCw className="w-4 h-4" />}
           />
         </div>
       </div>

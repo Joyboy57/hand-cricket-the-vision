@@ -6,9 +6,10 @@ import { cn } from "@/lib/utils";
 interface ButtonCtaProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     label?: string;
     className?: string;
+    icon?: React.ReactNode;
 }
 
-function ButtonCta({ label = "Get Access", className, ...props }: ButtonCtaProps) {
+function ButtonCta({ label = "Get Access", className, icon, ...props }: ButtonCtaProps) {
     return (
         <Button
             variant="ghost"
@@ -31,6 +32,7 @@ function ButtonCta({ label = "Get Access", className, ...props }: ButtonCtaProps
             <div className="absolute inset-[2px] shadow-[inset_0_0_15px_rgba(199,135,246,0.15)] rounded-lg" />
 
             <div className="relative flex items-center justify-center gap-2">
+                {icon && <span className="text-[#D69DDE]">{icon}</span>}
                 <span className="text-lg font-light bg-gradient-to-b from-[#D69DDE] to-[#B873F8] bg-clip-text text-transparent drop-shadow-[0_0_12px_rgba(199,135,246,0.4)] tracking-tighter">
                     {label}
                 </span>

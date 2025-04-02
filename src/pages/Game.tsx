@@ -4,17 +4,18 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useGame } from '@/lib/game-context';
 import { Waves } from '@/components/ui/waves-background';
-import { GooeyText } from '@/components/ui/gooey-text-morphing';
-import { ButtonCta } from '@/components/ui/button-shiny';
 import { Button } from '@/components/ui/button';
 import HandGestureDetector from '@/components/HandGestureDetector';
 import GameResults from '@/components/GameResults';
 import { useTheme } from 'next-themes';
 import { toast } from '@/hooks/use-toast';
-import { Pause, Info } from 'lucide-react';
+import { Pause } from 'lucide-react';
 import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
-import { AnimatedCounter } from '@/components/ui/animated-counter';
 import PauseMenu from '@/components/PauseMenu';
+import GameHeader from '@/components/GameHeader';
+import ScoreDisplay from '@/components/ScoreDisplay';
+import GameInfo from '@/components/GameInfo';
+import GameControls from '@/components/GameControls';
 
 const Game = () => {
   const { user } = useAuth();
@@ -30,12 +31,10 @@ const Game = () => {
     aiChoice,
     userBatting,
     isOut,
-    tossResult,
     startGame,
     makeChoice,
     resetGame,
     chooseToss,
-    chooseBatOrBowl,
   } = useGame();
   
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -46,6 +45,7 @@ const Game = () => {
   const [aiThinking, setAiThinking] = useState(false);
   const [showInningsEnd, setShowInningsEnd] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
+  const [calibrationComplete, setCalibrationComplete] = useState(false);
 
   useEffect(() => {
     // If a choice was made, start countdown for next move
@@ -79,8 +79,10 @@ const Game = () => {
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
   const handleGestureDetected = (gesture: number) => {
-    // Only accept gestures if we're not in countdown and the game is in progress
-    if (countdown === null && 
+    // Only accept gestures if calibration is complete, we're not in countdown, 
+    // and the game is in progress
+    if (calibrationComplete && 
+        countdown === null && 
         (gameState === 'batting' || gameState === 'bowling') && 
         !isPaused && 
         !showInningsEnd && 
@@ -106,6 +108,10 @@ const Game = () => {
     }
   };
 
+  const handleCalibrationComplete = () => {
+    setCalibrationComplete(true);
+  };
+
   // Handle toss outcome and let user choose
   const handleTossChoice = (choice: 'heads' | 'tails') => {
     const random = Math.random() > 0.5 ? 'heads' : 'tails';
@@ -116,7 +122,7 @@ const Game = () => {
       toast({
         title: "You won the toss!",
         description: "Choose whether to bat or bowl first",
-        variant: "success"
+        variant: "default"
       });
     } else {
       // AI chooses randomly
@@ -145,7 +151,7 @@ const Game = () => {
     toast({
       title: `You chose to ${isBatting ? 'bat' : 'bowl'} first`,
       description: "Get ready to play!",
-      variant: "success"
+      variant: "default"
     });
   };
   
@@ -160,6 +166,7 @@ const Game = () => {
     setShowInningsEnd(false);
     setShowGameOver(false);
     setShowHandDetector(false);
+    setCalibrationComplete(false);
   };
   
   // Pause game handlers
@@ -216,12 +223,7 @@ const Game = () => {
         </div>
         
         {/* Game header */}
-        <div className="mb-6 text-center">
-          <h1 className="text-3xl font-bold mb-2">Cricket Hand Gesture Game</h1>
-          <p className="text-muted-foreground">
-            Welcome {user?.name || 'Guest'} to Hand Cricket!
-          </p>
-        </div>
+        <GameHeader gameState={gameState} userName={user?.name} />
         
         {/* AI Thinking Overlay */}
         {aiThinking && (
@@ -258,119 +260,29 @@ const Game = () => {
         <div className="flex flex-col md:flex-row gap-6">
           {/* Left side - Controls and info */}
           <div className="flex-1 flex flex-col gap-4">
-            {/* Game state display */}
-            <div className="h-24 flex items-center justify-center bg-background/80 rounded-lg mb-4">
-              <GooeyText
-                texts={[
-                  gameState === 'toss' ? 'Choose Heads or Tails' : 
-                  gameState === 'batting' ? 'You are BATTING' :
-                  gameState === 'bowling' ? 'You are BOWLING' :
-                  gameState === 'gameOver' ? 'Game Over!' : 'Hand Cricket'
-                ]}
-                className="font-bold"
-                textClassName="text-4xl"
-              />
-            </div>
-            
             {/* Score display with animated counters */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="bg-background/80 p-4 rounded-lg text-center">
-                <h3 className="text-lg font-medium mb-2">Your Score</h3>
-                <div className="flex justify-center">
-                  <AnimatedCounter value={playerScore} />
-                </div>
-              </div>
-              <div className="bg-background/80 p-4 rounded-lg text-center">
-                <h3 className="text-lg font-medium mb-2">AI Score</h3>
-                <div className="flex justify-center">
-                  <AnimatedCounter value={aiScore} />
-                </div>
-              </div>
-            </div>
+            <ScoreDisplay playerScore={playerScore} aiScore={aiScore} />
             
             {/* Game info */}
-            <div className="bg-background/80 p-4 rounded-lg mb-4">
-              <h3 className="text-lg font-medium mb-2">Game Info</h3>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div>Innings: {innings}</div>
-                <div>Target: {target ? <span className="font-medium text-primary">{target}</span> : 'N/A'}</div>
-                <div>Your choice: {playerChoice !== null ? (playerChoice === 6 ? '👍' : playerChoice) : '-'}</div>
-                <div>AI choice: {aiChoice !== null ? (aiChoice === 6 ? '👍' : aiChoice) : '-'}</div>
-                {isOut && <div className="col-span-2 text-destructive font-medium">OUT! {playerChoice} = {aiChoice}</div>}
-              </div>
-            </div>
+            <GameInfo 
+              innings={innings} 
+              target={target} 
+              playerChoice={playerChoice} 
+              aiChoice={aiChoice} 
+              isOut={isOut} 
+            />
             
             {/* Game controls */}
-            <div className="bg-background/80 p-4 rounded-lg">
-              {gameState === 'toss' && !wonToss && (
-                <div className="flex flex-col gap-3">
-                  <p className="text-center">Choose Heads or Tails for the toss:</p>
-                  <div className="flex gap-4 justify-center">
-                    <ButtonCta 
-                      label="Heads" 
-                      onClick={() => handleTossChoice('heads')}
-                      className="w-32"
-                    />
-                    <ButtonCta 
-                      label="Tails" 
-                      onClick={() => handleTossChoice('tails')}
-                      className="w-32"
-                    />
-                  </div>
-                </div>
-              )}
-              
-              {gameState === 'toss' && wonToss && (
-                <div className="flex flex-col gap-3">
-                  <p className="text-center font-medium">You won the toss! Choose to:</p>
-                  <div className="flex gap-4 justify-center">
-                    <ButtonCta 
-                      label="Bat First" 
-                      onClick={() => handleBatBowlChoice(true)}
-                      className="w-32"
-                    />
-                    <ButtonCta 
-                      label="Bowl First" 
-                      onClick={() => handleBatBowlChoice(false)}
-                      className="w-32"
-                    />
-                  </div>
-                </div>
-              )}
-              
-              {gameState === 'gameOver' && !showGameOver && (
-                <div className="flex flex-col items-center gap-3">
-                  <p className="text-xl font-bold text-center">
-                    {playerScore > aiScore ? 'You Won! 🎉' : 
-                     playerScore < aiScore ? 'AI Won! 🤖' : 'It\'s a Tie! 🤝'}
-                  </p>
-                  <ButtonCta 
-                    label="Play Again" 
-                    onClick={handleRestartGame}
-                    className="w-full"
-                  />
-                </div>
-              )}
-              
-              {(gameState === 'batting' || gameState === 'bowling') && countdown !== null && (
-                <div className="flex justify-center items-center h-20">
-                  <p className="text-3xl font-bold">Next ball in: {countdown}</p>
-                </div>
-              )}
-              
-              {(gameState === 'batting' || gameState === 'bowling') && countdown === null && (
-                <div className="p-3 bg-primary/10 rounded-lg text-center">
-                  <p className="text-primary">
-                    {gameState === 'batting' 
-                      ? "Show your hand gesture to score runs!" 
-                      : "Show your hand gesture to try and get the AI out!"}
-                  </p>
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    1-4 fingers = score 1-4 | Open hand = 5 | Thumbs up = 6
-                  </div>
-                </div>
-              )}
-            </div>
+            <GameControls 
+              gameState={gameState}
+              wonToss={wonToss}
+              countdown={countdown}
+              playerScore={playerScore}
+              aiScore={aiScore}
+              onTossChoice={handleTossChoice}
+              onBatBowlChoice={handleBatBowlChoice}
+              onRestartGame={handleRestartGame}
+            />
           </div>
           
           {/* Right side - Hand gesture detector */}
@@ -379,6 +291,7 @@ const Game = () => {
               <HandGestureDetector 
                 onGestureDetected={handleGestureDetected} 
                 disabled={isPaused || showInningsEnd || showGameOver}
+                onCalibrationComplete={handleCalibrationComplete}
               />
             ) : (
               <div className="bg-background/80 p-6 rounded-lg h-full flex items-center justify-center">

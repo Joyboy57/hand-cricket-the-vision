@@ -12,13 +12,14 @@ export class MediaPipeService {
   private calibrationData: { handSize: number; thumbIndexDist: number } | null = null;
   private lastGestureDetected: number = 0;
   private gestureConfidence: { [key: number]: number } = {};
-  private readonly gestureThreshold: number = 2; // Lowered threshold for faster response
+  private readonly gestureThreshold: number = 3; // Increased threshold for more reliability
   private cameraStartAttempts: number = 0;
-  private maxCameraAttempts: number = 3;
+  private maxCameraAttempts: number = 5; // Increased max attempts
   private lastFrameProcessed: number = 0;
   private processingFrameRate: number = 15; // Process at most 15 frames per second
   private stuckDetectionTimer: number | null = null;
   private lastLandmarkTime: number = 0;
+  private noLandmarksTimeout: number | null = null;
 
   constructor() {
     // The actual Hands and Camera initialization will happen when initialize() is called
@@ -50,8 +51,8 @@ export class MediaPipeService {
     // Optimize for performance over accuracy for smoother experience
     this.hands.setOptions({
       maxNumHands: 1,
-      modelComplexity: 0, // Use lowest complexity for better performance
-      minDetectionConfidence: 0.5, // Lower threshold for better detection
+      modelComplexity: 1, // Use medium complexity for better detection
+      minDetectionConfidence: 0.6, // Higher threshold for more reliable detection
       minTrackingConfidence: 0.5
     });
 
@@ -114,6 +115,13 @@ export class MediaPipeService {
         if (this.camera) {
           this.camera.stop();
         }
+        
+        // Clear any existing timeouts
+        if (this.noLandmarksTimeout) {
+          clearTimeout(this.noLandmarksTimeout);
+          this.noLandmarksTimeout = null;
+        }
+        
         setTimeout(() => this.initializeCamera(), 500);
       }
     }, 2000);
@@ -122,6 +130,9 @@ export class MediaPipeService {
   public startCalibration(): void {
     this.isCalibrating = true;
     this.calibrationData = null;
+    // Reset all gesture confidence levels
+    this.gestureConfidence = {};
+    this.lastGestureDetected = 0;
     console.log("Calibration started");
     
     // After 5 seconds, end calibration
@@ -144,10 +155,21 @@ export class MediaPipeService {
       clearInterval(this.stuckDetectionTimer);
       this.stuckDetectionTimer = null;
     }
+    
+    if (this.noLandmarksTimeout) {
+      clearTimeout(this.noLandmarksTimeout);
+      this.noLandmarksTimeout = null;
+    }
   }
 
   private onResults(results: any): void {
     this.lastLandmarkTime = Date.now();
+    
+    // Clear any pending timeouts for "no landmarks"
+    if (this.noLandmarksTimeout) {
+      clearTimeout(this.noLandmarksTimeout);
+      this.noLandmarksTimeout = null;
+    }
     
     if (!this.canvasCtx || !this.canvasElement) return;
     
@@ -161,7 +183,7 @@ export class MediaPipeService {
     }
 
     // Draw hands with improved visibility
-    if (results.multiHandLandmarks) {
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       for (const landmarks of results.multiHandLandmarks) {
         // Draw connections with increased visibility
         window.drawConnectors(this.canvasCtx, landmarks, window.HAND_CONNECTIONS, 
@@ -197,6 +219,18 @@ export class MediaPipeService {
             this.processGestureWithConfidence(gesture);
           }
         }
+      }
+    } else {
+      // No hand landmarks detected
+      // If this persists for too long, we should try to restart the camera
+      if (!this.noLandmarksTimeout) {
+        this.noLandmarksTimeout = window.setTimeout(() => {
+          console.log("No landmarks detected for an extended period, attempting to restart camera");
+          if (this.camera) {
+            this.camera.stop();
+          }
+          setTimeout(() => this.initializeCamera(), 500);
+        }, 5000); // Wait 5 seconds of no landmarks before trying to restart
       }
     }
     
@@ -297,11 +331,9 @@ export class MediaPipeService {
       (isRingExtended ? 1 : 0) + 
       (isPinkyExtended ? 1 : 0);
     
-    console.log(`Fingers: Thumb: ${isThumbUp}, Index: ${isIndexExtended}, Middle: ${isMiddleExtended}, Ring: ${isRingExtended}, Pinky: ${isPinkyExtended}`);
-    
     // GESTURE DETECTION LOGIC:
     
-    // Gesture 6: Only thumb up (👍)
+    // Gesture 6: Only thumb up (👍) - more strict check
     if (isThumbUp && extendedFingerCount === 0) {
       return 6;
     }
@@ -330,11 +362,8 @@ export class MediaPipeService {
   ): boolean {
     if (isThumb) {
       // For thumb, we need special detection since it moves differently
-      // Check if thumb is sticking out to the side
-      const thumbOutward = tipLandmark.x < mcpLandmark.x - 0.1 || tipLandmark.x > mcpLandmark.x + 0.1;
-      
       // Check if thumb is pointing up
-      const thumbUp = tipLandmark.y < pipLandmark.y;
+      const thumbUp = tipLandmark.y < pipLandmark.y - 0.05;
       
       // Check if thumb is not curled in (comparing z coordinates)
       const notCurled = Math.abs(tipLandmark.z - pipLandmark.z) < 0.1;
@@ -343,17 +372,14 @@ export class MediaPipeService {
       return thumbUp && notCurled;
     } else {
       // For other fingers:
-      // 1. Check if finger tip is higher (smaller y) than the PIP joint
-      const isHigherThanPIP = tipLandmark.y < pipLandmark.y - 0.05;
+      // 1. Check if finger tip is higher (smaller y) than the PIP joint with a bigger margin
+      const isHigherThanPIP = tipLandmark.y < pipLandmark.y - 0.07;
       
-      // 2. Check if the fingertip is higher than the MCP joint
-      const isHigherThanMCP = tipLandmark.y < mcpLandmark.y;
-      
-      // 3. Check if the finger is extended outward (not curled)
+      // 2. Check if the fingertip is extended outward (not curled)
       const isForward = Math.abs(tipLandmark.z - pipLandmark.z) < 0.07;
       
-      // Combine checks - finger is considered extended if it's higher than both joints
-      return (isHigherThanPIP || isHigherThanMCP) && isForward;
+      // More strict criteria for finger extension
+      return isHigherThanPIP && isForward;
     }
   }
 }
