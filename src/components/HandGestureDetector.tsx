@@ -37,12 +37,20 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   const cameraTimeoutRef = useRef<number | null>(null);
   const restartAttemptsRef = useRef<number>(0);
   const lastDetectedGestureRef = useRef<number>(0);
+  const handDetectedRef = useRef<boolean>(false);
+  const userInitiatedRestartRef = useRef<boolean>(false);
+  const lastCameraRestartRef = useRef<number>(0);
   
   // Add gesture throttling to prevent too frequent updates
   const throttledGestureDetection = (gesture: number) => {
     if (disabled) return;
     
     const now = Date.now();
+    
+    // Update hand detected flag
+    if (gesture > 0) {
+      handDetectedRef.current = true;
+    }
     
     // Prevent first calibration gesture from being counted as game input
     if (calibrationLockRef.current) {
@@ -89,7 +97,9 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
       cameraTimeoutRef.current = window.setTimeout(() => {
         if (!mediaPipeService.isCameraRunning()) {
           console.log("Camera initialization timeout - retrying");
-          handleRestartCamera();
+          if (restartAttemptsRef.current < 2) {
+            handleRestartCamera();
+          }
         }
       }, 5000);
       
@@ -117,18 +127,31 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   // Add a watchdog effect to check if camera is frozen or stuck
   useEffect(() => {
     const cameraWatchdog = setInterval(() => {
-      if (cameraActive && mediaPipeService.isInitialized() && !mediaPipeService.isCameraRunning()) {
-        console.log("Camera watchdog detected non-running camera, restarting");
-        if (restartAttemptsRef.current < 5) {
-          restartAttemptsRef.current++;
-          handleRestartCamera();
-        } else {
-          // Too many restart attempts, notify user
-          toast({
-            title: "Camera issues detected",
-            description: "Please try refreshing the page or check your camera permissions",
-            variant: "destructive"
-          });
+      // Only restart if explicitly requested by user or initial setup
+      if (cameraActive && mediaPipeService.isInitialized() && !mediaPipeService.isCameraRunning() && 
+          (userInitiatedRestartRef.current || restartAttemptsRef.current < 2)) {
+          
+        const now = Date.now();
+        // Limit automatic restarts to once every 15 seconds to prevent loops
+        if (now - lastCameraRestartRef.current > 15000 || userInitiatedRestartRef.current) {
+          console.log("Camera watchdog detected non-running camera, restarting");
+          
+          if (restartAttemptsRef.current < 2 || userInitiatedRestartRef.current) {
+            restartAttemptsRef.current++;
+            lastCameraRestartRef.current = now;
+            handleRestartCamera();
+            userInitiatedRestartRef.current = false;
+          } else {
+            // Too many restart attempts, notify user only once
+            if (restartAttemptsRef.current === 2) {
+              restartAttemptsRef.current++; // Increment to prevent repeated notifications
+              toast({
+                title: "Camera issues detected",
+                description: "Please try clicking the restart camera button in the top left corner",
+                variant: "destructive"
+              });
+            }
+          }
         }
       }
     }, 10000); // Check every 10 seconds
@@ -198,6 +221,9 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   };
   
   const handleRestartCamera = () => {
+    // Set user initiated flag if this was manual
+    userInitiatedRestartRef.current = true;
+    
     // Stop current camera
     mediaPipeService.stopCamera();
     
@@ -225,10 +251,13 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
             onCameraStatusChange(true);
           }
           
-          toast({
-            title: "Camera restarted",
-            description: "Camera has been restarted successfully",
-          });
+          // Only show toast if user manually restarted
+          if (userInitiatedRestartRef.current) {
+            toast({
+              title: "Camera restarted",
+              description: "Camera has been restarted successfully",
+            });
+          }
         }
       }, 500);
     }, 500);

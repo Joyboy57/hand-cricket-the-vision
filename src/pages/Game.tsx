@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -47,7 +48,9 @@ const Game = () => {
   const [showGameOver, setShowGameOver] = useState(false);
   const [calibrationComplete, setCalibrationComplete] = useState(false);
   const [autoGestureTimer, setAutoGestureTimer] = useState<NodeJS.Timeout | null>(null);
-
+  const [handDetected, setHandDetected] = useState(false);
+  const countdownActiveRef = useRef(false);
+  
   useEffect(() => {
     if (playerChoice !== null && aiChoice !== null) {
       setCountdown(3);
@@ -75,6 +78,7 @@ const Game = () => {
     }
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
+  // Modified useEffect to only start countdown after confirming hand detection
   useEffect(() => {
     if (calibrationComplete && 
         (gameState === 'batting' || gameState === 'bowling') && 
@@ -82,34 +86,44 @@ const Game = () => {
         !showInningsEnd && 
         !showGameOver &&
         playerChoice === null &&
-        aiChoice === null) {
+        aiChoice === null &&
+        handDetected) {  // Only start countdown if hand is detected
       
-      if (autoGestureTimer) {
-        clearInterval(autoGestureTimer);
+      if (!countdownActiveRef.current) {
+        countdownActiveRef.current = true;
+        
+        if (autoGestureTimer) {
+          clearInterval(autoGestureTimer);
+        }
+        
+        setCountdown(3);
+        const timer = setInterval(() => {
+          setCountdown(prev => {
+            if (prev === null) return 3;
+            if (prev <= 1) {
+              countdownActiveRef.current = false;
+              clearInterval(timer);
+              return null;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+        
+        setAutoGestureTimer(timer);
+        
+        return () => {
+          if (timer) clearInterval(timer);
+          countdownActiveRef.current = false;
+        };
       }
-      
-      const timer = setInterval(() => {
-        setCountdown(prev => {
-          if (prev === null) return 3;
-          if (prev <= 1) {
-            return null;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-      
-      setAutoGestureTimer(timer);
-      
-      return () => {
-        if (timer) clearInterval(timer);
-      };
     } else if (playerChoice !== null || isPaused || showInningsEnd || showGameOver) {
       if (autoGestureTimer) {
         clearInterval(autoGestureTimer);
         setAutoGestureTimer(null);
       }
+      countdownActiveRef.current = false;
     }
-  }, [calibrationComplete, gameState, isPaused, showInningsEnd, showGameOver, playerChoice, aiChoice]);
+  }, [calibrationComplete, gameState, isPaused, showInningsEnd, showGameOver, playerChoice, aiChoice, handDetected]);
 
   const handleGestureDetected = (gesture: number) => {
     if (calibrationComplete && 
@@ -117,6 +131,8 @@ const Game = () => {
         !isPaused && 
         !showInningsEnd && 
         !showGameOver) {
+      
+      setHandDetected(true);
       
       if (gesture >= 1 && gesture <= 6) {
         setAiThinking(true);
@@ -137,6 +153,13 @@ const Game = () => {
 
   const handleCalibrationComplete = () => {
     setCalibrationComplete(true);
+  };
+
+  const handleCameraStatusChange = (isActive: boolean) => {
+    if (!isActive) {
+      // Reset hand detection when camera is off
+      setHandDetected(false);
+    }
   };
 
   const handleTossChoice = (choice: 'heads' | 'tails') => {
@@ -188,6 +211,7 @@ const Game = () => {
     setShowGameOver(false);
     setShowHandDetector(false);
     setCalibrationComplete(false);
+    setHandDetected(false);
   };
 
   const handlePause = () => {
@@ -205,6 +229,12 @@ const Game = () => {
       duration: 1500,
     });
   };
+
+  // Add a useRef for countdown to prevent stale closure issues
+  const countdownRef = useRef<number | null>(null);
+  useEffect(() => {
+    countdownRef.current = countdown;
+  }, [countdown]);
 
   return (
     <div className="relative min-h-screen w-full bg-background flex flex-col items-center justify-center p-4">
@@ -312,6 +342,7 @@ const Game = () => {
                 onGestureDetected={handleGestureDetected} 
                 disabled={isPaused || showInningsEnd || showGameOver}
                 onCalibrationComplete={handleCalibrationComplete}
+                onCameraStatusChange={handleCameraStatusChange}
               />
             ) : (
               <div className="bg-background/80 p-6 rounded-lg h-full flex items-center justify-center">
