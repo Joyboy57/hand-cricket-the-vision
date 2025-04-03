@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -50,6 +49,7 @@ const Game = () => {
   const [autoGestureTimer, setAutoGestureTimer] = useState<NodeJS.Timeout | null>(null);
   const [handDetected, setHandDetected] = useState(false);
   const countdownActiveRef = useRef(false);
+  const gestureProcessingRef = useRef(false);
   
   useEffect(() => {
     if (playerChoice !== null && aiChoice !== null) {
@@ -78,7 +78,6 @@ const Game = () => {
     }
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
-  // Modified useEffect to only start countdown after confirming hand detection
   useEffect(() => {
     if (calibrationComplete && 
         (gameState === 'batting' || gameState === 'bowling') && 
@@ -87,7 +86,7 @@ const Game = () => {
         !showGameOver &&
         playerChoice === null &&
         aiChoice === null &&
-        handDetected) {  // Only start countdown if hand is detected
+        handDetected) {  
       
       if (!countdownActiveRef.current) {
         countdownActiveRef.current = true;
@@ -130,22 +129,29 @@ const Game = () => {
         (gameState === 'batting' || gameState === 'bowling') && 
         !isPaused && 
         !showInningsEnd && 
-        !showGameOver) {
+        !showGameOver &&
+        !gestureProcessingRef.current) {
       
       setHandDetected(true);
       
       if (gesture >= 1 && gesture <= 6) {
+        gestureProcessingRef.current = true;
         setAiThinking(true);
+        
+        console.log(`Gesture detected: ${gesture}`);
+        
+        toast({
+          title: `Gesture detected: ${gesture}`,
+          description: gesture === 6 ? "Thumbs up! 👍" : `${gesture} finger${gesture > 1 ? 's' : ''}`,
+          duration: 1000,
+        });
         
         setTimeout(() => {
           makeChoice(gesture);
           setAiThinking(false);
-          
-          toast({
-            title: `Gesture detected: ${gesture}`,
-            description: gesture === 6 ? "Thumbs up! 👍" : `${gesture} finger${gesture > 1 ? 's' : ''}`,
-            duration: 1000,
-          });
+          setTimeout(() => {
+            gestureProcessingRef.current = false;
+          }, 1000);
         }, 600);
       }
     }
@@ -153,11 +159,15 @@ const Game = () => {
 
   const handleCalibrationComplete = () => {
     setCalibrationComplete(true);
+    toast({
+      title: "Calibration complete!",
+      description: "You can now play. Show 1-5 fingers or thumbs up (6).",
+      duration: 3000,
+    });
   };
 
   const handleCameraStatusChange = (isActive: boolean) => {
     if (!isActive) {
-      // Reset hand detection when camera is off
       setHandDetected(false);
     }
   };
@@ -230,7 +240,6 @@ const Game = () => {
     });
   };
 
-  // Add a useRef for countdown to prevent stale closure issues
   const countdownRef = useRef<number | null>(null);
   useEffect(() => {
     countdownRef.current = countdown;
@@ -340,7 +349,7 @@ const Game = () => {
             {showHandDetector ? (
               <HandGestureDetector 
                 onGestureDetected={handleGestureDetected} 
-                disabled={isPaused || showInningsEnd || showGameOver}
+                disabled={isPaused || showInningsEnd || showGameOver || gestureProcessingRef.current}
                 onCalibrationComplete={handleCalibrationComplete}
                 onCameraStatusChange={handleCameraStatusChange}
               />

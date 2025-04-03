@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { mediaPipeService } from '@/lib/mediapipe-service';
 import { Button } from '@/components/ui/button';
@@ -40,52 +39,69 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   const handDetectedRef = useRef<boolean>(false);
   const userInitiatedRestartRef = useRef<boolean>(false);
   const lastCameraRestartRef = useRef<number>(0);
-  
-  // Add gesture throttling to prevent too frequent updates
+  const currentGestureRef = useRef<number>(0);
+  const gestureConfidenceRef = useRef<{[key: number]: number}>({});
+
   const throttledGestureDetection = (gesture: number) => {
     if (disabled) return;
     
     const now = Date.now();
     
-    // Update hand detected flag
     if (gesture > 0) {
       handDetectedRef.current = true;
     }
     
-    // Prevent first calibration gesture from being counted as game input
     if (calibrationLockRef.current) {
       console.log("Gesture ignored due to calibration lock", gesture);
       return;
     }
     
-    // Store the last detected gesture
     if (gesture > 0) {
-      lastDetectedGestureRef.current = gesture;
-    }
-    
-    // Only process gestures at most once per 800ms (slower for better reliability)
-    if (now - lastGestureTimeRef.current > 800 && gesture > 0) {
-      lastGestureTimeRef.current = now;
-      setIsProcessing(true);
-      
-      if (onProcessingChange) {
-        onProcessingChange(true);
-      }
-      
-      // Simulate a quick "thinking" period for better user feedback
-      setTimeout(() => {
-        onGestureDetected(gesture);
-        setIsProcessing(false);
-        
-        if (onProcessingChange) {
-          onProcessingChange(false);
+      Object.keys(gestureConfidenceRef.current).forEach(key => {
+        if (parseInt(key) !== gesture) {
+          gestureConfidenceRef.current[parseInt(key)] = 0;
         }
-      }, 500);
+      });
+      
+      gestureConfidenceRef.current[gesture] = (gestureConfidenceRef.current[gesture] || 0) + 1;
+      
+      console.log(`Gesture ${gesture} confidence: ${gestureConfidenceRef.current[gesture]}/3`);
+      
+      if (gestureConfidenceRef.current[gesture] >= 3 && currentGestureRef.current !== gesture) {
+        lastDetectedGestureRef.current = gesture;
+        currentGestureRef.current = gesture;
+        
+        console.log(`Detected gesture: ${gesture} with confidence: ${gestureConfidenceRef.current[gesture]}`);
+        
+        if (now - lastGestureTimeRef.current > 800) {
+          lastGestureTimeRef.current = now;
+          setIsProcessing(true);
+          
+          if (onProcessingChange) {
+            onProcessingChange(true);
+          }
+          
+          console.log(`Processing gesture: ${gesture}`);
+          
+          setTimeout(() => {
+            onGestureDetected(gesture);
+            setIsProcessing(false);
+            
+            if (onProcessingChange) {
+              onProcessingChange(false);
+            }
+            
+            setTimeout(() => {
+              currentGestureRef.current = 0;
+              gestureConfidenceRef.current = {};
+            }, 1000);
+          }, 300);
+        }
+      }
     }
   };
 
   useEffect(() => {
-    // Initialize MediaPipe when component mounts
     if (videoRef.current && canvasRef.current && cameraActive) {
       const initPromise = mediaPipeService.initialize(
         videoRef.current,
@@ -93,7 +109,6 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
         throttledGestureDetection
       );
       
-      // Set a timeout for camera initialization
       cameraTimeoutRef.current = window.setTimeout(() => {
         if (!mediaPipeService.isCameraRunning()) {
           console.log("Camera initialization timeout - retrying");
@@ -103,17 +118,14 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
         }
       }, 5000);
       
-      // Notify parent about camera status
       if (onCameraStatusChange) {
         onCameraStatusChange(true);
       }
     }
 
     return () => {
-      // Clean up when component unmounts
       mediaPipeService.stopCamera();
       
-      // Clear timeouts to prevent memory leaks
       if (calibrationTimeoutRef.current) {
         clearTimeout(calibrationTimeoutRef.current);
       }
@@ -124,15 +136,12 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
     };
   }, [onGestureDetected, cameraActive]);
 
-  // Add a watchdog effect to check if camera is frozen or stuck
   useEffect(() => {
     const cameraWatchdog = setInterval(() => {
-      // Only restart if explicitly requested by user or initial setup
       if (cameraActive && mediaPipeService.isInitialized() && !mediaPipeService.isCameraRunning() && 
           (userInitiatedRestartRef.current || restartAttemptsRef.current < 2)) {
           
         const now = Date.now();
-        // Limit automatic restarts to once every 15 seconds to prevent loops
         if (now - lastCameraRestartRef.current > 15000 || userInitiatedRestartRef.current) {
           console.log("Camera watchdog detected non-running camera, restarting");
           
@@ -142,9 +151,8 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
             handleRestartCamera();
             userInitiatedRestartRef.current = false;
           } else {
-            // Too many restart attempts, notify user only once
             if (restartAttemptsRef.current === 2) {
-              restartAttemptsRef.current++; // Increment to prevent repeated notifications
+              restartAttemptsRef.current++;
               toast({
                 title: "Camera issues detected",
                 description: "Please try clicking the restart camera button in the top left corner",
@@ -154,7 +162,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
           }
         }
       }
-    }, 10000); // Check every 10 seconds
+    }, 10000);
     
     return () => {
       clearInterval(cameraWatchdog);
@@ -166,21 +174,20 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
     setCalibrationComplete(false);
     setCountdown(5);
     calibrationLockRef.current = true;
+    currentGestureRef.current = 0;
+    gestureConfidenceRef.current = {};
     
-    // Start the countdown
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
           
-          // Start calibration progress
           mediaPipeService.startCalibration();
           toast({
             title: "Calibration in progress",
             description: "Please show your hand clearly with all fingers extended",
           });
           
-          // Show progress bar increasing during calibration
           let progress = 0;
           const progressTimer = setInterval(() => {
             progress += 5;
@@ -188,17 +195,13 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
             
             if (progress >= 100) {
               clearInterval(progressTimer);
-              // Set calibration complete
               setTimeout(() => {
                 setIsCalibrating(false);
                 setCalibrationComplete(true);
                 
-                // Wait for 3 seconds before allowing gestures to be counted
-                // This prevents the calibration gesture from being counted as game input
                 calibrationTimeoutRef.current = window.setTimeout(() => {
                   calibrationLockRef.current = false;
                   
-                  // Notify parent that calibration is complete
                   if (onCalibrationComplete) {
                     onCalibrationComplete();
                   }
@@ -219,26 +222,21 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
       });
     }, 1000);
   };
-  
+
   const handleRestartCamera = () => {
-    // Set user initiated flag if this was manual
     userInitiatedRestartRef.current = true;
     
-    // Stop current camera
     mediaPipeService.stopCamera();
     
-    // Toggle camera state to trigger re-initialization
     setCameraActive(false);
     
     if (onCameraStatusChange) {
       onCameraStatusChange(false);
     }
     
-    // Small delay before restarting
     setTimeout(() => {
       setCameraActive(true);
       
-      // Need to reinitialize after camera restart
       setTimeout(() => {
         if (videoRef.current && canvasRef.current) {
           mediaPipeService.initialize(
@@ -251,7 +249,6 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
             onCameraStatusChange(true);
           }
           
-          // Only show toast if user manually restarted
           if (userInitiatedRestartRef.current) {
             toast({
               title: "Camera restarted",
@@ -323,7 +320,6 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
           </div>
         )}
         
-        {/* Camera controls */}
         <div className="absolute top-4 left-4">
           <Button 
             variant="outline" 

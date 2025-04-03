@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -6,10 +7,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { GooeyText } from "@/components/ui/gooey-text-morphing";
-import { ChevronRight, Github } from "lucide-react";
+import { HyperText } from "@/components/ui/hyper-text";
+import { ChevronRight, Github, AlertCircle } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/auth";
 import { RetroGrid } from "@/components/ui/retro-grid";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -28,17 +31,28 @@ const Auth = () => {
     password: ""
   });
 
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // Password validation
+  const validatePassword = (password: string): boolean => {
+    // Password must be at least 6 characters
+    return password.length >= 6;
+  };
+
   const handleLoginChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setLoginData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setAuthError(null);
   };
 
   const handleSignupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSignupData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setAuthError(null);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setAuthError(null);
     
     try {
       await login(loginData.email, loginData.password);
@@ -48,12 +62,14 @@ const Auth = () => {
       });
       navigate('/game');
     } catch (error) {
+      console.error("Login error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Invalid email or password";
+      setAuthError(errorMessage);
       toast({
         title: "Login failed",
-        description: "Please check your credentials and try again.",
+        description: errorMessage,
         variant: "destructive"
       });
-      console.error("Login error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -62,6 +78,14 @@ const Auth = () => {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setAuthError(null);
+    
+    // Validate password
+    if (!validatePassword(signupData.password)) {
+      setAuthError("Password must be at least 6 characters");
+      setIsLoading(false);
+      return;
+    }
     
     try {
       await register(signupData.name, signupData.email, signupData.password);
@@ -71,12 +95,14 @@ const Auth = () => {
       });
       navigate('/game');
     } catch (error) {
+      console.error("Signup error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Signup failed";
+      setAuthError(errorMessage);
       toast({
         title: "Signup failed",
-        description: "Please check your information and try again.",
+        description: errorMessage,
         variant: "destructive"
       });
-      console.error("Signup error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -94,9 +120,16 @@ const Auth = () => {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden">
       <RetroGrid className="opacity-30" />
       
-      <div className="h-[200px] w-full mb-6 relative z-10">
+      <div className="h-[240px] w-full mb-2 relative z-10 flex flex-col items-center justify-center">
+        <div className="mb-6">
+          <HyperText
+            className="text-4xl font-bold text-indigo-600"
+            text="THE VISION"
+            duration={1000}
+          />
+        </div>
         <GooeyText
-          texts={["Gesture", "Cricket", "Challenge", "Game"]}
+          texts={["Hand", "Cricket", "Challenge", "Game"]}
           morphTime={1}
           cooldownTime={1.5}
           className="font-bold text-indigo-600"
@@ -120,6 +153,12 @@ const Auth = () => {
           <TabsContent value="login">
             <form onSubmit={handleLogin}>
               <CardContent className="space-y-4 pt-4">
+                {authError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{authError}</AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="login-email">Email</Label>
                   <Input 
@@ -161,6 +200,12 @@ const Auth = () => {
           <TabsContent value="signup">
             <form onSubmit={handleSignup}>
               <CardContent className="space-y-4 pt-4">
+                {authError && (
+                  <Alert variant="destructive" className="mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{authError}</AlertDescription>
+                  </Alert>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="signup-name">Name</Label>
                   <Input 
@@ -195,6 +240,9 @@ const Auth = () => {
                     onChange={handleSignupChange}
                     required
                   />
+                  <p className="text-sm text-muted-foreground">
+                    Password must be at least 6 characters
+                  </p>
                 </div>
               </CardContent>
               
