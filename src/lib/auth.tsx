@@ -44,13 +44,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('name')
-            .eq('id', session.user.id)
-            .maybeSingle();
-            
-          setUser(transformUser(session.user, profileData?.name));
+          try {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('name')
+              .eq('id', session.user.id)
+              .maybeSingle();
+              
+            setUser(transformUser(session.user, profileData?.name || ''));
+          } catch (error) {
+            console.error('Error fetching profile:', error);
+            setUser(transformUser(session.user));
+          }
         } else {
           setUser(null);
         }
@@ -63,13 +68,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('name')
-            .eq('id', session.user.id)
-            .maybeSingle();
-            
-          setUser(transformUser(session.user, profileData?.name));
+          try {
+            const { data: profileData } = await supabase
+              .from('profiles')
+              .select('name')
+              .eq('id', session.user.id)
+              .maybeSingle();
+              
+            setUser(transformUser(session.user, profileData?.name || ''));
+          } catch (error) {
+            console.error('Error fetching profile:', error);
+            setUser(transformUser(session.user));
+          }
         } else {
           // Fallback to localStorage for compatibility
           const storedUser = localStorage.getItem('currentUser');
@@ -114,14 +124,20 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) throw error;
       
       if (data.user) {
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', data.user.id)
-          .maybeSingle();
-          
-        const authUser = transformUser(data.user, profileData?.name);
-        setUser(authUser);
+        try {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', data.user.id)
+            .maybeSingle();
+            
+          const authUser = transformUser(data.user, profileData?.name || '');
+          setUser(authUser);
+        } catch (error) {
+          console.error('Error fetching profile:', error);
+          const authUser = transformUser(data.user);
+          setUser(authUser);
+        }
         return;
       }
       
@@ -151,11 +167,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) throw error;
       
       if (data.user) {
-        // Create profile entry with name
-        await supabase.from('profiles').insert([
-          { id: data.user.id, name, email }
-        ]);
-        
+        // Profile will be created by the database trigger
         const authUser = transformUser(data.user, name);
         setUser(authUser);
         return;
