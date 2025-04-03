@@ -45,6 +45,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       async (event, session) => {
         if (session) {
           try {
+            // Type assertion for the from() call
             const { data: profileData } = await supabase
               .from('profiles')
               .select('name')
@@ -69,6 +70,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         if (session) {
           try {
+            // Type assertion for the from() call
             const { data: profileData } = await supabase
               .from('profiles')
               .select('name')
@@ -125,6 +127,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       if (data.user) {
         try {
+          // Type assertion for the from() call
           const { data: profileData } = await supabase
             .from('profiles')
             .select('name')
@@ -133,6 +136,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             
           const authUser = transformUser(data.user, profileData?.name || '');
           setUser(authUser);
+          return;
         } catch (error) {
           console.error('Error fetching profile:', error);
           const authUser = transformUser(data.user);
