@@ -17,6 +17,7 @@ import ScoreDisplay from '@/components/ScoreDisplay';
 import GameInfo from '@/components/GameInfo';
 import GameControls from '@/components/GameControls';
 import { HyperText } from '@/components/ui/hyper-text';
+import { useAiOpponent } from '@/hooks/useAiOpponent';
 
 const Game = () => {
   const { user } = useAuth();
@@ -48,26 +49,25 @@ const Game = () => {
   const [showInningsEnd, setShowInningsEnd] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
   const [calibrationComplete, setCalibrationComplete] = useState(false);
-  const [autoGestureTimer, setAutoGestureTimer] = useState<NodeJS.Timeout | null>(null);
   const [handDetected, setHandDetected] = useState(false);
   const countdownActiveRef = useRef(false);
   const gestureProcessingRef = useRef(false);
+  const { getAiMove } = useAiOpponent();
   
-  // Handle player/AI choice updates and trigger countdown
+  // Handle player/AI choice updates
   useEffect(() => {
-    if (playerChoice !== null && aiChoice !== null) {
-      setCountdown(3);
-      const timer = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev === null || prev <= 1) {
-            clearInterval(timer);
-            return null;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (playerChoice !== null && aiChoice === null) {
+      // AI is thinking - perform AI move calculation
+      setAiThinking(true);
       
-      return () => clearInterval(timer);
+      // Use AI opponent to generate the AI's move
+      const timer = setTimeout(async () => {
+        const aiMove = await getAiMove(playerChoice, userBatting, ballsPlayed, playerScore, aiScore, innings);
+        makeChoice(playerChoice, aiMove);
+        setAiThinking(false);
+      }, 600);
+      
+      return () => clearTimeout(timer);
     }
   }, [playerChoice, aiChoice]);
   
@@ -82,53 +82,6 @@ const Game = () => {
     }
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
-  // Handle automatic countdown for gesture detection
-  useEffect(() => {
-    if (calibrationComplete && 
-        (gameState === 'batting' || gameState === 'bowling') && 
-        !isPaused && 
-        !showInningsEnd && 
-        !showGameOver &&
-        playerChoice === null &&
-        aiChoice === null &&
-        handDetected) {  
-      
-      if (!countdownActiveRef.current) {
-        countdownActiveRef.current = true;
-        
-        if (autoGestureTimer) {
-          clearInterval(autoGestureTimer);
-        }
-        
-        setCountdown(3);
-        const timer = setInterval(() => {
-          setCountdown(prev => {
-            if (prev === null) return 3;
-            if (prev <= 1) {
-              countdownActiveRef.current = false;
-              clearInterval(timer);
-              return null;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-        
-        setAutoGestureTimer(timer);
-        
-        return () => {
-          if (timer) clearInterval(timer);
-          countdownActiveRef.current = false;
-        };
-      }
-    } else if (playerChoice !== null || isPaused || showInningsEnd || showGameOver) {
-      if (autoGestureTimer) {
-        clearInterval(autoGestureTimer);
-        setAutoGestureTimer(null);
-      }
-      countdownActiveRef.current = false;
-    }
-  }, [calibrationComplete, gameState, isPaused, showInningsEnd, showGameOver, playerChoice, aiChoice, handDetected]);
-
   const handleGestureDetected = (gesture: number) => {
     if (calibrationComplete && 
         (gameState === 'batting' || gameState === 'bowling') && 
@@ -141,7 +94,6 @@ const Game = () => {
       
       if (gesture >= 1 && gesture <= 6) {
         gestureProcessingRef.current = true;
-        setAiThinking(true);
         
         console.log(`Gesture detected: ${gesture}`);
         
@@ -151,13 +103,12 @@ const Game = () => {
           duration: 1000,
         });
         
+        // Submit user's choice (AI move will be calculated in the effect above)
+        makeChoice(gesture);
+        
         setTimeout(() => {
-          makeChoice(gesture);
-          setAiThinking(false);
-          setTimeout(() => {
-            gestureProcessingRef.current = false;
-          }, 1000);
-        }, 600);
+          gestureProcessingRef.current = false;
+        }, 1000);
       }
     }
   };
@@ -245,11 +196,6 @@ const Game = () => {
     });
   };
 
-  const countdownRef = useRef<number | null>(null);
-  useEffect(() => {
-    countdownRef.current = countdown;
-  }, [countdown]);
-
   return (
     <div className="relative min-h-screen w-full bg-background flex flex-col items-center justify-center p-4">
       <div className="absolute inset-0 z-0">
@@ -290,22 +236,20 @@ const Game = () => {
           isCamera={showHandDetector}
         />
         
-        {/* Countdown overlay */}
+        {/* Countdown display without overlays */}
         {countdown !== null && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/40 backdrop-blur-sm rounded-xl pointer-events-none">
-            <div className="text-center">
-              <HyperText
-                className="text-7xl font-bold mb-4 text-primary"
-                text={countdown.toString()}
-                duration={1000}
-              />
-            </div>
+          <div className="text-center my-2">
+            <HyperText
+              className="text-3xl font-bold text-primary"
+              text={countdown.toString()}
+              duration={800}
+            />
           </div>
         )}
         
         {aiThinking && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
-            <div className="text-center">
+          <div className="absolute inset-0 z-50 flex items-center justify-center">
+            <div className="text-center bg-background/80 p-8 rounded-xl">
               <TextShimmerWave
                 className="text-2xl font-bold mb-2 [--base-color:#3b82f6] [--base-gradient-color:#60a5fa]"
                 duration={1.5}

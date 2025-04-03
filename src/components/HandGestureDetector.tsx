@@ -35,12 +35,8 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   const [cameraActive, setCameraActive] = useState(true);
   const calibrationLockRef = useRef<boolean>(true);
   const calibrationTimeoutRef = useRef<number | null>(null);
-  const cameraTimeoutRef = useRef<number | null>(null);
-  const restartAttemptsRef = useRef<number>(0);
   const lastDetectedGestureRef = useRef<number>(0);
   const handDetectedRef = useRef<boolean>(false);
-  const userInitiatedRestartRef = useRef<boolean>(false);
-  const lastCameraRestartRef = useRef<number>(0);
   const currentGestureRef = useRef<number>(0);
   const gestureConfidenceRef = useRef<{[key: number]: number}>({});
   const [debugInfo, setDebugInfo] = useState<string>('');
@@ -74,7 +70,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
       
       console.log(`Gesture ${gesture} confidence: ${gestureConfidenceRef.current[gesture]}/3`);
       
-      if (gestureConfidenceRef.current[gesture] >= 3 && currentGestureRef.current !== gesture) {
+      if (gestureConfidenceRef.current[gesture] >= 2 && currentGestureRef.current !== gesture) {
         lastDetectedGestureRef.current = gesture;
         currentGestureRef.current = gesture;
         
@@ -123,15 +119,6 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
         throttledGestureDetection
       );
       
-      cameraTimeoutRef.current = window.setTimeout(() => {
-        if (!mediaPipeService.isCameraRunning()) {
-          console.log("Camera initialization timeout - retrying");
-          if (restartAttemptsRef.current < 2) {
-            handleRestartCamera();
-          }
-        }
-      }, 5000);
-      
       if (onCameraStatusChange) {
         onCameraStatusChange(true);
       }
@@ -143,46 +130,8 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
       if (calibrationTimeoutRef.current) {
         clearTimeout(calibrationTimeoutRef.current);
       }
-      
-      if (cameraTimeoutRef.current) {
-        clearTimeout(cameraTimeoutRef.current);
-      }
     };
   }, [onGestureDetected, cameraActive]);
-
-  // Camera watchdog for automatic recovery
-  useEffect(() => {
-    const cameraWatchdog = setInterval(() => {
-      if (cameraActive && mediaPipeService.isInitialized() && !mediaPipeService.isCameraRunning() && 
-          (userInitiatedRestartRef.current || restartAttemptsRef.current < 2)) {
-          
-        const now = Date.now();
-        if (now - lastCameraRestartRef.current > 15000 || userInitiatedRestartRef.current) {
-          console.log("Camera watchdog detected non-running camera, restarting");
-          
-          if (restartAttemptsRef.current < 2 || userInitiatedRestartRef.current) {
-            restartAttemptsRef.current++;
-            lastCameraRestartRef.current = now;
-            handleRestartCamera();
-            userInitiatedRestartRef.current = false;
-          } else {
-            if (restartAttemptsRef.current === 2) {
-              restartAttemptsRef.current++;
-              toast({
-                title: "Camera issues detected",
-                description: "Please try clicking the restart camera button in the top left corner",
-                variant: "destructive"
-              });
-            }
-          }
-        }
-      }
-    }, 10000);
-    
-    return () => {
-      clearInterval(cameraWatchdog);
-    };
-  }, [cameraActive]);
 
   const startCalibration = () => {
     setIsCalibrating(true);
@@ -239,8 +188,6 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   };
 
   const handleRestartCamera = () => {
-    userInitiatedRestartRef.current = true;
-    
     mediaPipeService.stopCamera();
     
     setCameraActive(false);
@@ -264,12 +211,10 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
             onCameraStatusChange(true);
           }
           
-          if (userInitiatedRestartRef.current) {
-            toast({
-              title: "Camera restarted",
-              description: "Camera has been restarted successfully",
-            });
-          }
+          toast({
+            title: "Camera restarted",
+            description: "Camera has been restarted successfully",
+          });
         }
       }, 500);
     }, 500);
@@ -310,15 +255,15 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
         )}
         
         {isCalibrating && countdown > 0 && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-            <div className="text-white text-4xl font-bold">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-primary text-4xl font-bold">
               Calibration starting in {countdown}
             </div>
           </div>
         )}
         
         {isCalibrating && countdown === 0 && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60">
+          <div className="absolute inset-0 flex flex-col items-center justify-center">
             <TextShimmerWave
               className="text-2xl font-semibold mb-4 [--base-color:#ffffff] [--base-gradient-color:#60a5fa]"
               duration={1.2}

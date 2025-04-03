@@ -20,7 +20,7 @@ type GameContextType = {
   ballsPlayed: number;
   startGame: (battingFirst: boolean) => void;
   resetGame: () => void;
-  makeChoice: (userMove: number) => void;
+  makeChoice: (userMove: number, aiMoveOverride?: number) => void;
   chooseToss: (choice: 'heads' | 'tails') => void;
   chooseBatOrBowl: (choice: 'bat' | 'bowl') => void;
 };
@@ -72,13 +72,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setBallsPlayed(0);
   };
 
-  // Handle user move
-  const makeChoice = (userMove: number) => {
+  // Handle user move with optional AI move override
+  const makeChoice = (userMove: number, aiMoveOverride?: number) => {
     if (userMove < 1 || userMove > 6) {
       throw new Error('Invalid move: Must be between 1 and 6');
     }
 
-    const aiMove = generateAiMove();
+    const aiMove = aiMoveOverride !== undefined ? aiMoveOverride : generateAiMove();
     setPlayerChoice(userMove);
     setAiChoice(aiMove);
     
@@ -115,6 +115,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsOut(false);
       setGameState('bowling');
       setInnings(2);
+      setBallsPlayed(0); // Reset balls played for second innings
       
       // Small delay to let the OUT! message be seen
       setTimeout(() => {
@@ -136,6 +137,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setIsOut(false);
       setGameState('batting');
       setInnings(2);
+      setBallsPlayed(0); // Reset balls played for second innings
       
       // Small delay to let the OUT! message be seen
       setTimeout(() => {

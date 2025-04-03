@@ -12,20 +12,14 @@ export class MediaPipeService {
   private calibrationData: { handSize: number; thumbIndexDist: number } | null = null;
   private lastGestureDetected: number = 0;
   private gestureConfidence: { [key: number]: number } = {};
-  private readonly gestureThreshold: number = 3; // Threshold for gesture confidence
-  private cameraStartAttempts: number = 0;
-  private maxCameraAttempts: number = 5;
+  private readonly gestureThreshold: number = 2; // Lower threshold for more responsive detection
   private lastFrameProcessed: number = 0;
-  private processingFrameRate: number = 15; // Process frames at this rate for better performance
-  private stuckDetectionTimer: number | null = null;
+  private processingFrameRate: number = 20; // Higher frame rate for better responsiveness
   private lastLandmarkTime: number = 0;
-  private noLandmarksTimeout: number | null = null;
   private isCameraRunningFlag: boolean = false;
-  private restartInProgress: boolean = false;
-  private consecutiveFailedFrames: number = 0;
-  private maxConsecutiveFailedFrames: number = 10;
   private fingersUp: boolean[] = [false, false, false, false, false];
   private gestureDebugInfo: string = '';
+  private cameraStartedSuccessfully: boolean = false;
 
   constructor() {
     // The actual Hands and Camera initialization will happen when initialize() is called
@@ -38,7 +32,6 @@ export class MediaPipeService {
   ): Promise<boolean> {
     if (!window.Hands || !window.Camera) {
       console.error("MediaPipe libraries not loaded yet");
-      setTimeout(() => this.initialize(videoElement, canvasElement, onGestureDetected), 500);
       return false;
     }
 
@@ -67,7 +60,6 @@ export class MediaPipeService {
     // Initialize camera
     try {
       const initialized = await this.initializeCamera();
-      this.setupStuckDetection();
       this.isReady = initialized;
       console.log("MediaPipe service initialized", initialized);
       return initialized;
@@ -78,10 +70,7 @@ export class MediaPipeService {
   }
   
   private async initializeCamera(): Promise<boolean> {
-    try {
-      this.cameraStartAttempts++;
-      this.consecutiveFailedFrames = 0;
-      
+    try {      
       if (this.videoElement) {
         this.camera = new window.Camera(this.videoElement, {
           onFrame: async () => {
@@ -92,17 +81,8 @@ export class MediaPipeService {
               if (this.videoElement && this.hands) {
                 try {
                   await this.hands.send({ image: this.videoElement });
-                  // Reset failed frames counter on success
-                  this.consecutiveFailedFrames = 0;
                 } catch (err) {
                   console.error("Error sending frame to MediaPipe:", err);
-                  this.consecutiveFailedFrames++;
-                  
-                  // If too many consecutive failed frames, try to restart
-                  if (this.consecutiveFailedFrames >= this.maxConsecutiveFailedFrames && !this.restartInProgress) {
-                    console.log("Too many consecutive failed frames, attempting to restart camera");
-                    this.restartCamera();
-                  }
                 }
               }
             }
@@ -114,20 +94,12 @@ export class MediaPipeService {
         try {
           await this.camera.start();
           this.isCameraRunningFlag = true;
+          this.cameraStartedSuccessfully = true;
           console.log("Camera started successfully");
           return true;
         } catch (err) {
           console.error("Camera start error:", err);
           this.isCameraRunningFlag = false;
-          
-          if (this.cameraStartAttempts < this.maxCameraAttempts && !this.restartInProgress) {
-            // Try again with a delay
-            this.restartInProgress = true;
-            setTimeout(() => {
-              this.restartInProgress = false;
-              this.initializeCamera();
-            }, 1000);
-          }
           return false;
         }
       }
@@ -135,15 +107,6 @@ export class MediaPipeService {
     } catch (err) {
       console.error("Camera initialization error:", err);
       this.isCameraRunningFlag = false;
-      
-      if (this.cameraStartAttempts < this.maxCameraAttempts && !this.restartInProgress) {
-        // Try again with a delay
-        this.restartInProgress = true;
-        setTimeout(() => {
-          this.restartInProgress = false;
-          this.initializeCamera();
-        }, 1000);
-      }
       return false;
     }
   }
@@ -160,49 +123,6 @@ export class MediaPipeService {
     return this.gestureDebugInfo;
   }
   
-  private setupStuckDetection(): void {
-    // Clear any existing timer
-    if (this.stuckDetectionTimer !== null) {
-      clearInterval(this.stuckDetectionTimer);
-    }
-    
-    // Check every 3 seconds if landmarks are being updated
-    this.stuckDetectionTimer = window.setInterval(() => {
-      const now = Date.now();
-      // If no landmarks received for 5 seconds, try to restart camera
-      if (now - this.lastLandmarkTime > 5000 && this.lastLandmarkTime !== 0 && !this.restartInProgress) {
-        console.log("Hand tracking appears to be stuck, restarting camera...");
-        this.restartCamera();
-      }
-    }, 3000);
-  }
-  
-  private async restartCamera(): Promise<void> {
-    if (this.restartInProgress) return;
-    
-    this.restartInProgress = true;
-    
-    if (this.camera) {
-      this.isCameraRunningFlag = false;
-      this.camera.stop();
-    }
-    
-    // Clear any existing timeouts
-    if (this.noLandmarksTimeout) {
-      clearTimeout(this.noLandmarksTimeout);
-      this.noLandmarksTimeout = null;
-    }
-    
-    // Wait before restarting
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    if (this.videoElement && this.canvasElement && this.gestureCallback) {
-      await this.initialize(this.videoElement, this.canvasElement, this.gestureCallback);
-    }
-    
-    this.restartInProgress = false;
-  }
-
   public startCalibration(): void {
     this.isCalibrating = true;
     this.calibrationData = null;
@@ -219,31 +139,17 @@ export class MediaPipeService {
   }
 
   public stopCamera(): void {
+    if (!this.cameraStartedSuccessfully) return; // Don't stop if never started successfully
+    
     this.isCameraRunningFlag = false;
     
     if (this.camera) {
       this.camera.stop();
     }
-    
-    if (this.stuckDetectionTimer) {
-      clearInterval(this.stuckDetectionTimer);
-      this.stuckDetectionTimer = null;
-    }
-    
-    if (this.noLandmarksTimeout) {
-      clearTimeout(this.noLandmarksTimeout);
-      this.noLandmarksTimeout = null;
-    }
   }
 
   private onResults(results: any): void {
     this.lastLandmarkTime = Date.now();
-    
-    // Clear any pending timeouts for "no landmarks"
-    if (this.noLandmarksTimeout) {
-      clearTimeout(this.noLandmarksTimeout);
-      this.noLandmarksTimeout = null;
-    }
     
     if (!this.canvasCtx || !this.canvasElement) return;
     
@@ -297,15 +203,6 @@ export class MediaPipeService {
             this.processGestureWithConfidence(gesture);
           }
         }
-      }
-    } else {
-      // No hand landmarks detected
-      // If this persists for too long, we should try to restart the camera
-      if (!this.noLandmarksTimeout && !this.restartInProgress) {
-        this.noLandmarksTimeout = window.setTimeout(() => {
-          console.log("No landmarks detected for an extended period, attempting to restart camera");
-          this.restartCamera();
-        }, 7000); // Wait 7 seconds of no landmarks before trying to restart
       }
     }
 
