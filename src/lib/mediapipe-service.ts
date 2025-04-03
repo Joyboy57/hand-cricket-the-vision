@@ -12,11 +12,11 @@ export class MediaPipeService {
   private calibrationData: { handSize: number; thumbIndexDist: number } | null = null;
   private lastGestureDetected: number = 0;
   private gestureConfidence: { [key: number]: number } = {};
-  private readonly gestureThreshold: number = 3; // Lowered threshold to detect gestures faster
+  private readonly gestureThreshold: number = 3; // Threshold for gesture confidence
   private cameraStartAttempts: number = 0;
   private maxCameraAttempts: number = 5;
   private lastFrameProcessed: number = 0;
-  private processingFrameRate: number = 15; // Increased process rate for more responsive detection
+  private processingFrameRate: number = 15; // Process frames at this rate for better performance
   private stuckDetectionTimer: number | null = null;
   private lastLandmarkTime: number = 0;
   private noLandmarksTimeout: number | null = null;
@@ -24,6 +24,8 @@ export class MediaPipeService {
   private restartInProgress: boolean = false;
   private consecutiveFailedFrames: number = 0;
   private maxConsecutiveFailedFrames: number = 10;
+  private fingersUp: boolean[] = [false, false, false, false, false];
+  private gestureDebugInfo: string = '';
 
   constructor() {
     // The actual Hands and Camera initialization will happen when initialize() is called
@@ -153,6 +155,10 @@ export class MediaPipeService {
   public isInitialized(): boolean {
     return this.isReady;
   }
+
+  public getDebugInfo(): string {
+    return this.gestureDebugInfo;
+  }
   
   private setupStuckDetection(): void {
     // Clear any existing timer
@@ -279,6 +285,10 @@ export class MediaPipeService {
         } 
         // Only detect gestures if not calibrating
         else if (this.gestureCallback) {
+          // First detect which fingers are up
+          this.fingersUp = this.detectFingersUp(landmarks);
+
+          // Now detect the gesture based on finger positions
           const gesture = this.detectImprovedGesture(landmarks);
           
           // Only trigger callback if we're confident about the gesture
@@ -297,6 +307,22 @@ export class MediaPipeService {
           this.restartCamera();
         }, 7000); // Wait 7 seconds of no landmarks before trying to restart
       }
+    }
+
+    // Add debug overlay if calibration is complete
+    if (!this.isCalibrating && this.calibrationData && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      // Show current detected fingers
+      const fingerLabels = ['👍', '☝️', '✌️', '🤟', '✋', '👌'];
+      this.canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      this.canvasCtx.fillRect(10, 10, 120, 60);
+      this.canvasCtx.font = '16px Arial';
+      this.canvasCtx.fillStyle = 'white';
+      this.canvasCtx.fillText('Fingers: ' + this.fingersUp.map(f => f ? '1' : '0').join(''), 20, 30);
+      
+      // Show the current detected gesture
+      const gesture = this.lastGestureDetected;
+      const gestureText = gesture > 0 ? fingerLabels[gesture - 1] + ' ' + gesture : 'None';
+      this.canvasCtx.fillText('Gesture: ' + gestureText, 20, 50);
     }
     
     this.canvasCtx.restore();
@@ -329,7 +355,7 @@ export class MediaPipeService {
     };
   }
 
-  // Improved confidence-based gesture detection with faster response time
+  // Improved confidence-based gesture detection system
   private processGestureWithConfidence(gesture: number): void {
     // Reset confidence for other gestures
     for (const key in this.gestureConfidence) {
@@ -341,10 +367,15 @@ export class MediaPipeService {
     // Increment confidence for the current gesture
     this.gestureConfidence[gesture] = (this.gestureConfidence[gesture] || 0) + 1;
     
+    // Update debug info
+    this.gestureDebugInfo = `Gesture ${gesture}: Confidence ${this.gestureConfidence[gesture]}/${this.gestureThreshold}`;
+    
     // If we've reached the threshold, trigger the callback
     if (this.gestureConfidence[gesture] >= this.gestureThreshold && 
         this.lastGestureDetected !== gesture) {
+      console.log(`Gesture detected: ${gesture} with confidence: ${this.gestureConfidence[gesture]}`);
       this.lastGestureDetected = gesture;
+      
       if (this.gestureCallback) {
         this.gestureCallback(gesture);
       }
@@ -358,94 +389,70 @@ export class MediaPipeService {
     }
   }
 
+  // Detect which fingers are extended (up)
+  private detectFingersUp(landmarks: any[]): boolean[] {
+    if (!landmarks || landmarks.length < 21) return [false, false, false, false, false];
+
+    // Define indices for the tips and pips of each finger
+    const tipIds = [4, 8, 12, 16, 20]; // Thumb, index, middle, ring, pinky tips
+    const fingers = [];
+    
+    // Special case for thumb due to its different orientation
+    const thumbIp = landmarks[3];  // IP joint
+    const thumbTip = landmarks[4]; // Tip
+    const thumbCmc = landmarks[1]; // CMC joint
+    const wrist = landmarks[0];    // Wrist
+    
+    // Calculate thumb extension using the 3D coordinates
+    // Thumb is up if the tip's y is less than the IP joint's y
+    // And the tip is far enough from the wrist in x coordinate
+    const thumbExtended = thumbTip.y < thumbIp.y && 
+                          Math.abs(thumbTip.x - wrist.x) > Math.abs(thumbCmc.x - wrist.x);
+    
+    fingers.push(thumbExtended);
+    
+    // For the four fingers
+    for (let i = 1; i < 5; i++) {
+      const tipId = tipIds[i];
+      const pipId = tipId - 2; // PIP joint is 2 indices back from tip
+      
+      // Check if fingertip is higher than pip joint (y gets smaller as we go up)
+      // And also check if the finger is bent by looking at z coords
+      const fingerExtended = landmarks[tipId].y < landmarks[pipId].y;
+      
+      fingers.push(fingerExtended);
+    }
+    
+    return fingers;
+  }
+
+  // Improved gesture detection
   private detectImprovedGesture(landmarks: any[]): number {
-    // Improved gesture detection optimized for Hand Cricket game
     if (!landmarks || landmarks.length < 21) return 0;
     
-    // Fingertips and key joints
-    const wrist = landmarks[0];
-    const thumbTip = landmarks[4];
-    const indexTip = landmarks[8];
-    const middleTip = landmarks[12];
-    const ringTip = landmarks[16];
-    const pinkyTip = landmarks[20];
+    // First get which fingers are extended
+    const fingers = this.fingersUp;
     
-    // MCP joints (knuckles)
-    const indexMCP = landmarks[5];
-    const middleMCP = landmarks[9];
-    const ringMCP = landmarks[13];
-    const pinkyMCP = landmarks[17];
-    
-    // PIP joints (middle joints)
-    const indexPIP = landmarks[6];
-    const middlePIP = landmarks[10];
-    const ringPIP = landmarks[14];
-    const pinkyPIP = landmarks[18];
-    
-    // Check if each finger is extended using improved criteria
-    const isThumbUp = this.isFingerExtended(thumbTip, landmarks[3], landmarks[2], wrist, true);
-    const isIndexExtended = this.isFingerExtended(indexTip, indexPIP, indexMCP, wrist);
-    const isMiddleExtended = this.isFingerExtended(middleTip, middlePIP, middleMCP, wrist);
-    const isRingExtended = this.isFingerExtended(ringTip, ringPIP, ringMCP, wrist);
-    const isPinkyExtended = this.isFingerExtended(pinkyTip, pinkyPIP, pinkyMCP, wrist);
-    
-    // Count extended fingers (excluding thumb)
-    const extendedFingerCount = 
-      (isIndexExtended ? 1 : 0) + 
-      (isMiddleExtended ? 1 : 0) + 
-      (isRingExtended ? 1 : 0) + 
-      (isPinkyExtended ? 1 : 0);
-    
-    // GESTURE DETECTION LOGIC:
-    
-    // Gesture 6: Only thumb up (👍) - more strict check
-    if (isThumbUp && extendedFingerCount === 0) {
+    // For thumbs up (gesture 6) - only thumb is extended
+    if (fingers[0] && !fingers[1] && !fingers[2] && !fingers[3] && !fingers[4]) {
       return 6;
     }
     
-    // Gesture 5: Open hand with all fingers extended
-    if (extendedFingerCount >= 4) {
+    // For open hand (gesture 5) - all fingers extended
+    if (fingers[0] && fingers[1] && fingers[2] && fingers[3] && fingers[4]) {
       return 5;
     }
     
-    // Gesture 1-4: Number of extended fingers (excluding thumb)
-    if (extendedFingerCount > 0 && extendedFingerCount <= 4) {
-      return extendedFingerCount;
+    // Count extended fingers (excluding thumb for gestures 1-4)
+    const extendedFingers = fingers.slice(1).filter(f => f).length;
+    
+    // Make sure we're in valid range for the game
+    if (extendedFingers >= 1 && extendedFingers <= 4) {
+      return extendedFingers;
     }
     
-    // Default - no recognized gesture
+    // Default case - no recognized gesture
     return 0;
-  }
-  
-  // Improved finger extension detection
-  private isFingerExtended(
-    tipLandmark: any, 
-    pipLandmark: any, 
-    mcpLandmark: any, 
-    wristLandmark: any,
-    isThumb: boolean = false
-  ): boolean {
-    if (isThumb) {
-      // For thumb, we need special detection since it moves differently
-      // Check if thumb is pointing up
-      const thumbUp = tipLandmark.y < pipLandmark.y - 0.05;
-      
-      // Check if thumb is not curled in (comparing z coordinates)
-      const notCurled = Math.abs(tipLandmark.z - pipLandmark.z) < 0.1;
-      
-      // For thumbs-up, we want the thumb extended upward
-      return thumbUp && notCurled;
-    } else {
-      // For other fingers:
-      // 1. Check if finger tip is higher (smaller y) than the PIP joint with a bigger margin
-      const isHigherThanPIP = tipLandmark.y < pipLandmark.y - 0.07;
-      
-      // 2. Check if the fingertip is extended outward (not curled)
-      const isForward = Math.abs(tipLandmark.z - pipLandmark.z) < 0.07;
-      
-      // More strict criteria for finger extension
-      return isHigherThanPIP && isForward;
-    }
   }
 }
 

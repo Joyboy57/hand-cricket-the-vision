@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 import { mediaPipeService } from '@/lib/mediapipe-service';
 import { Button } from '@/components/ui/button';
@@ -6,6 +7,7 @@ import { toast } from '@/hooks/use-toast';
 import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
 import { Progress } from '@/components/ui/progress';
 import { RefreshCw, Camera, CameraOff } from 'lucide-react';
+import { HyperText } from '@/components/ui/hyper-text';
 
 interface HandGestureDetectorProps {
   onGestureDetected: (gesture: number) => void;
@@ -41,7 +43,9 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   const lastCameraRestartRef = useRef<number>(0);
   const currentGestureRef = useRef<number>(0);
   const gestureConfidenceRef = useRef<{[key: number]: number}>({});
+  const [debugInfo, setDebugInfo] = useState<string>('');
 
+  // Enhanced gesture detection with improved confidence system
   const throttledGestureDetection = (gesture: number) => {
     if (disabled) return;
     
@@ -57,6 +61,9 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
     }
     
     if (gesture > 0) {
+      // Update debug info
+      setDebugInfo(mediaPipeService.getDebugInfo());
+      
       Object.keys(gestureConfidenceRef.current).forEach(key => {
         if (parseInt(key) !== gesture) {
           gestureConfidenceRef.current[parseInt(key)] = 0;
@@ -82,6 +89,13 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
           }
           
           console.log(`Processing gesture: ${gesture}`);
+          
+          // Show visual feedback for the detected gesture
+          toast({
+            title: `Gesture detected: ${gesture}`,
+            description: gesture === 6 ? "Thumbs up! 👍" : `${gesture} finger${gesture > 1 ? 's' : ''}`,
+            duration: 1000,
+          });
           
           setTimeout(() => {
             onGestureDetected(gesture);
@@ -136,6 +150,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
     };
   }, [onGestureDetected, cameraActive]);
 
+  // Camera watchdog for automatic recovery
   useEffect(() => {
     const cameraWatchdog = setInterval(() => {
       if (cameraActive && mediaPipeService.isInitialized() && !mediaPipeService.isCameraRunning() && 
@@ -260,6 +275,15 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
     }, 500);
   };
 
+  // Render gesture info helper
+  const renderGestureGuide = () => (
+    <div className="mt-2 grid grid-cols-3 gap-2 text-sm text-muted-foreground">
+      <div>1-4 fingers = score 1-4</div>
+      <div>Open hand = score 5</div>
+      <div>Thumbs up = score 6</div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col items-center">
       <div className="relative w-full max-w-md bg-background rounded-lg overflow-hidden">
@@ -331,6 +355,13 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
             <RefreshCw className="h-4 w-4" />
           </Button>
         </div>
+        
+        {/* Debug info overlay */}
+        {debugInfo && (
+          <div className="absolute bottom-4 left-4 bg-black/50 px-3 py-1 rounded text-xs text-white">
+            {debugInfo}
+          </div>
+        )}
       </div>
       
       <div className="mt-4 w-full">
@@ -345,11 +376,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
             <span className="text-green-500 font-medium">
               Calibration complete! You can now play.
             </span>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-sm text-muted-foreground">
-              <div>1-4 fingers = score 1-4</div>
-              <div>Open hand = score 5</div>
-              <div>Thumbs up = score 6</div>
-            </div>
+            {renderGestureGuide()}
           </div>
         )}
       </div>

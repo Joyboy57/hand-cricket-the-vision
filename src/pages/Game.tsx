@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -15,6 +16,7 @@ import GameHeader from '@/components/GameHeader';
 import ScoreDisplay from '@/components/ScoreDisplay';
 import GameInfo from '@/components/GameInfo';
 import GameControls from '@/components/GameControls';
+import { HyperText } from '@/components/ui/hyper-text';
 
 const Game = () => {
   const { user } = useAuth();
@@ -51,6 +53,7 @@ const Game = () => {
   const countdownActiveRef = useRef(false);
   const gestureProcessingRef = useRef(false);
   
+  // Handle player/AI choice updates and trigger countdown
   useEffect(() => {
     if (playerChoice !== null && aiChoice !== null) {
       setCountdown(3);
@@ -68,6 +71,7 @@ const Game = () => {
     }
   }, [playerChoice, aiChoice]);
   
+  // Handle innings and game state changes
   useEffect(() => {
     if (innings === 2 && target !== null && !showInningsEnd) {
       setShowInningsEnd(true);
@@ -78,6 +82,7 @@ const Game = () => {
     }
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
+  // Handle automatic countdown for gesture detection
   useEffect(() => {
     if (calibrationComplete && 
         (gameState === 'batting' || gameState === 'bowling') && 
@@ -284,6 +289,19 @@ const Game = () => {
           isProcessingGesture={aiThinking}
           isCamera={showHandDetector}
         />
+        
+        {/* Countdown overlay */}
+        {countdown !== null && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/40 backdrop-blur-sm rounded-xl pointer-events-none">
+            <div className="text-center">
+              <HyperText
+                className="text-7xl font-bold mb-4 text-primary"
+                text={countdown.toString()}
+                duration={1000}
+              />
+            </div>
+          </div>
+        )}
         
         {aiThinking && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
