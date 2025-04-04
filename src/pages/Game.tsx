@@ -168,7 +168,20 @@ const Game = () => {
   };
 
   const handleContinueToNextInnings = () => {
+    console.log("Handle continue to next innings called");
     setShowInningsEnd(false);
+    
+    // Make sure hand detector is active and game state is correct
+    if (!showHandDetector) {
+      setShowHandDetector(true);
+    }
+    
+    // Display toast to inform player about second innings start
+    toast({
+      title: `Second Innings Started!`,
+      description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Get ready!`,
+      duration: 3000,
+    });
   };
 
   const handleRestartGame = () => {

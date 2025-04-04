@@ -37,6 +37,7 @@ const GameResults: React.FC<GameResultsProps> = ({
   };
 
   const handleContinueClick = () => {
+    console.log("Continue to next innings clicked");
     // Make sure onRestartGame is properly called for continuing to next innings
     onRestartGame();
   };
