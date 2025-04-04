@@ -66,7 +66,8 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
             playerScore={playerScore}
             aiScore={aiScore}
             target={target}
-            onRestartGame={showGameOver ? onRestartGame : onContinueToNextInnings}
+            onRestartGame={onRestartGame}
+            onContinueToNextInnings={onContinueToNextInnings}
           />
         </div>
       )}

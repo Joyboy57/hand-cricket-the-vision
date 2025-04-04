@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { getResultMessage } from '@/lib/game-utils';
 import { RetroGrid } from '@/components/ui/retro-grid';
+import { useGame } from '@/lib/game-context';
 
 interface GameResultsProps {
   isGameOver: boolean;
@@ -15,6 +16,7 @@ interface GameResultsProps {
   aiScore: number;
   target: number | null;
   onRestartGame: () => void;
+  onContinueToNextInnings: () => void;
 }
 
 const GameResults: React.FC<GameResultsProps> = ({
@@ -24,8 +26,10 @@ const GameResults: React.FC<GameResultsProps> = ({
   aiScore,
   target,
   onRestartGame,
+  onContinueToNextInnings,
 }) => {
   const navigate = useNavigate();
+  const { statistics } = useGame();
   
   // Determine result message for game over
   const resultMessage = isGameOver
@@ -38,8 +42,11 @@ const GameResults: React.FC<GameResultsProps> = ({
 
   const handleContinueClick = () => {
     console.log("Continue to next innings clicked");
-    // Make sure onRestartGame is properly called for continuing to next innings
-    onRestartGame();
+    if (isFirstInningsOver && !isGameOver) {
+      onContinueToNextInnings();
+    } else {
+      onRestartGame();
+    }
   };
 
   return (
@@ -102,6 +109,33 @@ const GameResults: React.FC<GameResultsProps> = ({
             {playerScore > aiScore
               ? "AI needs to score this many runs to win"
               : "You need to score this many runs to win"}
+          </div>
+        </div>
+      )}
+      
+      {/* Player Statistics (show only on game over) */}
+      {isGameOver && (
+        <div className="bg-background/80 p-4 rounded-lg text-center mb-6">
+          <h3 className="text-lg font-medium mb-3">Your Statistics</h3>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="text-left">Games Played:</div>
+            <div className="text-right font-medium">{statistics.gamesPlayed}</div>
+            
+            <div className="text-left">Games Won:</div>
+            <div className="text-right font-medium">{statistics.gamesWon}</div>
+            
+            <div className="text-left">Win Rate:</div>
+            <div className="text-right font-medium">
+              {statistics.gamesPlayed > 0 
+                ? Math.round((statistics.gamesWon / statistics.gamesPlayed) * 100) 
+                : 0}%
+            </div>
+            
+            <div className="text-left">Highest Score:</div>
+            <div className="text-right font-medium">{statistics.highestScore}</div>
+            
+            <div className="text-left">Strike Rate:</div>
+            <div className="text-right font-medium">{statistics.strikeRate}</div>
           </div>
         </div>
       )}

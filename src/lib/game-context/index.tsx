@@ -1,12 +1,12 @@
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { isPlayerOut, isGameOver } from './game-utils';
-import { GameContextType, GameState as GameStateType } from './game-types';
-import { handlePlayerOut, updateScores } from './game-innings';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
+import { GameContextType, GameStateType, GameState, PlayerStatistics } from '../game-types';
+import { handleGameActions } from './game-actions';
+import { INITIAL_STATISTICS, loadStatistics, saveStatistics } from './statistics';
 
 // Initial state for game context
-const initialState = {
-  gameState: 'toss' as GameStateType,
+const initialState: GameState = {
+  gameState: 'toss',
   playerScore: 0,
   aiScore: 0,
   innings: 1,
@@ -17,6 +17,7 @@ const initialState = {
   isOut: false,
   tossResult: null,
   ballsPlayed: 0,
+  statistics: INITIAL_STATISTICS
 };
 
 // Create context
@@ -35,6 +36,45 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isOut, setIsOut] = useState(false);
   const [tossResult, setTossResult] = useState<string | null>(null);
   const [ballsPlayed, setBallsPlayed] = useState(0);
+  const [statistics, setStatistics] = useState<PlayerStatistics>(INITIAL_STATISTICS);
+  const [cameraKey, setCameraKey] = useState(0); // For camera refresh
+
+  // Load statistics on initial load
+  useEffect(() => {
+    const savedStats = loadStatistics();
+    if (savedStats) {
+      setStatistics(savedStats);
+    }
+  }, []);
+
+  // Save statistics when game ends
+  useEffect(() => {
+    if (gameState === 'gameOver') {
+      const updatedStats = {
+        ...statistics,
+        gamesPlayed: statistics.gamesPlayed + 1,
+        gamesWon: playerScore > aiScore ? statistics.gamesWon + 1 : statistics.gamesWon,
+        highestScore: Math.max(statistics.highestScore, playerScore),
+        totalRuns: statistics.totalRuns + playerScore
+      };
+      
+      // Calculate strike rate
+      if (ballsPlayed > 0) {
+        updatedStats.strikeRate = Math.round((playerScore / ballsPlayed) * 100);
+      }
+      
+      // Check if this is a new best figure
+      if (playerScore > statistics.bestFigures.runs) {
+        updatedStats.bestFigures = {
+          runs: playerScore,
+          innings
+        };
+      }
+      
+      setStatistics(updatedStats);
+      saveStatistics(updatedStats);
+    }
+  }, [gameState]);
 
   // Reset game state
   const resetGame = () => {
@@ -58,6 +98,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setIsOut(false);
   };
 
+  // Refresh camera by updating key
+  const refreshCamera = useCallback(() => {
+    setCameraKey(prev => prev + 1);
+  }, []);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'r' || e.key === 'R') {
+        refreshCamera();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [refreshCamera]);
+
   // Handle user move with optional AI move override
   const makeChoice = (userMove: number, aiMoveOverride?: number) => {
     if (userMove < 1 || userMove > 6) {
@@ -71,41 +128,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Increment balls played
     setBallsPlayed(prev => prev + 1);
 
-    // Check if out
-    if (isPlayerOut(userMove, aiMove)) {
-      setIsOut(true);
-      
-      // Get current state
-      const currentState = {
-        gameState,
-        playerScore,
-        aiScore,
-        innings,
-        target,
-        playerChoice: userMove,
-        aiChoice: aiMove,
-        userBatting,
-        isOut: true,
-        tossResult,
-        ballsPlayed: ballsPlayed + 1,
-      };
-      
-      // Handle player out using the extracted logic
-      handlePlayerOut(
-        currentState,
-        setGameState,
-        setTarget,
-        setUserBatting,
-        setIsOut,
-        setInnings,
-        setBallsPlayed,
-        resetChoices
-      );
-      return;
-    }
-
-    // Not out, update scores
-    const currentState = {
+    const currentState: GameState = {
       gameState,
       playerScore,
       aiScore,
@@ -114,18 +137,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       playerChoice: userMove,
       aiChoice: aiMove,
       userBatting,
-      isOut,
+      isOut: userMove === aiMove,
       tossResult,
       ballsPlayed: ballsPlayed + 1,
+      statistics
     };
     
-    updateScores(
+    handleGameActions(
       currentState,
+      setGameState,
       setPlayerScore,
       setAiScore,
-      setGameState,
-      resetChoices,
-      isGameOver
+      setTarget,
+      setUserBatting,
+      setIsOut,
+      setInnings,
+      setBallsPlayed,
+      resetChoices
     );
   };
 
@@ -133,9 +161,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const startGame = (battingFirst: boolean) => {
     setUserBatting(battingFirst);
     setGameState(battingFirst ? 'batting' : 'bowling');
-    setBallsPlayed(0); // Reset balls played at the start of the game
-    
-    // Clear any previous choices when starting a new game
+    setBallsPlayed(0);
     resetChoices();
   };
 
@@ -150,7 +176,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // AI chooses to bat or bowl
       const aiChoice = Math.random() > 0.5;
       setUserBatting(!aiChoice);
-      // We don't set gameState here, this is handled by the UI
     }
   };
 
@@ -174,11 +199,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         isOut,
         tossResult,
         ballsPlayed,
+        statistics,
         startGame,
         resetGame,
         makeChoice,
         chooseToss,
         chooseBatOrBowl,
+        refreshCamera
       }}
     >
       {children}

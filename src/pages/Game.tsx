@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useGame } from '@/lib/game-context';
@@ -46,8 +46,7 @@ const Game = () => {
   const [aiThinking, setAiThinking] = useState(false);
   const [showInningsEnd, setShowInningsEnd] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
-  const countdownActiveRef = useRef(false);
-  const { getAiMove } = useAiOpponent();
+  const { getAiMove, resetHistory } = useAiOpponent();
   
   // Handle player/AI choice updates
   useEffect(() => {
@@ -125,7 +124,7 @@ const Game = () => {
     console.log("Handle continue to next innings called");
     setShowInningsEnd(false);
     
-    // Make sure hand detector is active and game state is correct
+    // Make sure hand detector is active for second innings
     if (!showHandDetector) {
       setShowHandDetector(true);
     }
@@ -133,13 +132,14 @@ const Game = () => {
     // Display toast to inform player about second innings start
     toast({
       title: `Second Innings Started!`,
-      description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Get ready!`,
+      description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
       duration: 3000,
     });
   };
 
   const handleRestartGame = () => {
     resetGame();
+    resetHistory();
     setShowInningsEnd(false);
     setShowGameOver(false);
     setShowHandDetector(false);

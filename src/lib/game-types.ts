@@ -1,10 +1,10 @@
 
 // Game state types
-export type GameState = 'toss' | 'batting' | 'bowling' | 'gameOver';
+export type GameStateType = 'toss' | 'batting' | 'bowling' | 'gameOver';
 
 // Type for game context
 export interface GameContextType {
-  gameState: GameState;
+  gameState: GameStateType;
   playerScore: number;
   aiScore: number;
   innings: number;
@@ -15,16 +15,18 @@ export interface GameContextType {
   isOut: boolean;
   tossResult: string | null;
   ballsPlayed: number;
+  statistics: PlayerStatistics;
   startGame: (battingFirst: boolean) => void;
   resetGame: () => void;
   makeChoice: (userMove: number, aiMoveOverride?: number) => void;
   chooseToss: (choice: 'heads' | 'tails') => void;
   chooseBatOrBowl: (choice: 'bat' | 'bowl') => void;
+  refreshCamera: () => void;
 }
 
 // Initial state interface
 export interface GameState {
-  gameState: GameState;
+  gameState: GameStateType;
   playerScore: number;
   aiScore: number;
   innings: number;
@@ -35,6 +37,7 @@ export interface GameState {
   isOut: boolean;
   tossResult: string | null;
   ballsPlayed: number;
+  statistics: PlayerStatistics;
 }
 
 export interface InningsState {
@@ -42,4 +45,16 @@ export interface InningsState {
   aiScore: number;
   userBatting: boolean;
   target: number | null;
+}
+
+export interface PlayerStatistics {
+  gamesPlayed: number;
+  gamesWon: number;
+  highestScore: number;
+  totalRuns: number;
+  strikeRate: number;
+  bestFigures: {
+    runs: number;
+    innings: number;
+  };
 }

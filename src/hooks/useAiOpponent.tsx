@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { toast } from '@/hooks/use-toast';
 
@@ -10,10 +9,19 @@ interface AiOpponentState {
   error: string | null;
 }
 
+interface AiMoveHistory {
+  playerMoves: number[];
+  aiMoves: number[];
+}
+
 export const useAiOpponent = () => {
   const [state, setState] = useState<AiOpponentState>({
     isLoading: false,
     error: null,
+  });
+  const [moveHistory, setMoveHistory] = useState<AiMoveHistory>({
+    playerMoves: [],
+    aiMoves: []
   });
 
   // Function to get AI move using the Xyris AI API
@@ -25,6 +33,12 @@ export const useAiOpponent = () => {
     aiScore: number,
     innings: number
   ): Promise<number> => {
+    // Update move history
+    setMoveHistory(prev => ({
+      playerMoves: [...prev.playerMoves, playerChoice],
+      aiMoves: [...prev.aiMoves]
+    }));
+
     // Start loading
     setState({ isLoading: true, error: null });
 
@@ -36,8 +50,15 @@ export const useAiOpponent = () => {
         ballsPlayed,
         playerScore,
         aiScore,
-        innings
+        innings,
+        moveHistory
       );
+
+      // Update AI move history
+      setMoveHistory(prev => ({
+        playerMoves: prev.playerMoves,
+        aiMoves: [...prev.aiMoves, aiMoveFromApi]
+      }));
 
       setState({ isLoading: false, error: null });
       return aiMoveFromApi;
@@ -47,17 +68,25 @@ export const useAiOpponent = () => {
       // Fallback to rule-based AI if API fails
       setState({ isLoading: false, error: error instanceof Error ? error.message : "Unknown error" });
       
-      const ruleMovePromise = getRuleBasedAiMove(
+      const ruleMove = await getRuleBasedAiMove(
         playerChoice,
         userBatting,
         ballsPlayed,
         playerScore,
         aiScore,
-        innings
+        innings,
+        moveHistory
       );
-      return ruleMovePromise;
+
+      // Update AI move history
+      setMoveHistory(prev => ({
+        playerMoves: prev.playerMoves,
+        aiMoves: [...prev.aiMoves, ruleMove]
+      }));
+
+      return ruleMove;
     }
-  }, []);
+  }, [moveHistory]);
 
   // Function to fetch AI move from the Xyris API
   const fetchAiMoveFromApi = async (
@@ -66,7 +95,8 @@ export const useAiOpponent = () => {
     ballsPlayed: number,
     playerScore: number,
     aiScore: number,
-    innings: number
+    innings: number,
+    history: AiMoveHistory
   ): Promise<number> => {
     try {
       // Prepare the game state context for the AI
@@ -77,7 +107,8 @@ export const useAiOpponent = () => {
         playerScore,
         aiScore,
         innings,
-        gameType: "hand-cricket"
+        gameType: "hand-cricket",
+        moveHistory: history
       };
 
       // Make the API request
@@ -112,19 +143,20 @@ export const useAiOpponent = () => {
     }
   };
 
-  // Fallback: Rule-based AI logic
+  // Improved rule-based AI logic
   const getRuleBasedAiMove = async (
     playerChoice: number,
     userBatting: boolean,
     ballsPlayed: number,
     playerScore: number,
     aiScore: number,
-    innings: number
+    innings: number,
+    history: AiMoveHistory
   ): Promise<number> => {
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 300));
     
-    console.log("Using rule-based AI fallback");
+    console.log("Using improved rule-based AI fallback");
     
     // Show toast message about using fallback AI
     toast({
@@ -134,10 +166,13 @@ export const useAiOpponent = () => {
       duration: 3000
     });
     
-    // Basic strategy patterns
+    // Calculate the target for second innings
     const target = innings === 2 ? (userBatting ? aiScore + 1 : playerScore + 1) : null;
     
-    // If we're in the second innings and chasing
+    // Analyze player's move history to find patterns
+    const patternAnalysis = analyzePlayerPatterns(history.playerMoves);
+    
+    // Second innings strategy
     if (innings === 2) {
       // If AI is batting and needs to chase player's score
       if (!userBatting) {
@@ -146,53 +181,151 @@ export const useAiOpponent = () => {
           // Try to score exactly what we need, or try to avoid getting out
           return target - aiScore;
         }
+        
+        // If we need a lot of runs, be more aggressive
+        if (target && (target - aiScore) > 12) {
+          // Try to score high runs (4, 5, 6) more often
+          if (Math.random() < 0.6) {
+            return [4, 5, 6][Math.floor(Math.random() * 3)];
+          }
+        }
       }
       // If player is batting and AI is bowling
       else if (userBatting) {
-        // If player is close to winning, try to get them out by matching their patterns
+        // If player is close to winning, try to get them out
         if (target && (target - playerScore) <= 12) {
-          // Increased chance to match player's last move to get them out
+          // If we have a predicted move from pattern analysis, use it with high probability
+          if (patternAnalysis.predictedNextMove && Math.random() < 0.6) {
+            return patternAnalysis.predictedNextMove;
+          }
+          
+          // Otherwise, try to match their last move with increased probability
           if (Math.random() < 0.4) {
             return playerChoice;
           }
         }
       }
     }
-
-    // Pattern recognition
-    if (ballsPlayed > 2) {
-      // If player tends to choose the same number repeatedly
-      if (playerChoice === 5 || playerChoice === 6) {
-        // Try to match their choice to get them out
-        if (Math.random() < 0.3) {
-          return playerChoice;
+    
+    // First innings strategy
+    else {
+      // If AI is batting, play more conservatively to build a score
+      if (!userBatting) {
+        // Avoid matching player's last move to prevent getting out
+        if (patternAnalysis.mostCommonMove && Math.random() < 0.4) {
+          // Avoid the most common move
+          let aiMove;
+          do {
+            aiMove = Math.floor(Math.random() * 6) + 1;
+          } while (aiMove === patternAnalysis.mostCommonMove);
+          return aiMove;
+        }
+      }
+      // If AI is bowling, try to get player out early
+      else {
+        // If we have a predicted move, use it
+        if (patternAnalysis.predictedNextMove && Math.random() < 0.5) {
+          return patternAnalysis.predictedNextMove;
         }
       }
     }
     
-    // Basic intelligence - adapt to player's history
+    // Basic intelligence with weighted choices
     let aiMove = Math.floor(Math.random() * 6) + 1;
     
-    // Try to avoid obvious choices
+    // Avoid obvious choices
     if (playerChoice === aiMove && Math.random() < 0.7) {
+      // Pick something else
       aiMove = ((aiMove + Math.floor(Math.random() * 3) + 1) % 6) + 1;
     }
     
-    // Semi-randomized decision with weighted probability
-    if (Math.random() < 0.2) {
-      // Sometimes pick 1, 3, or 5 (odd numbers)
-      aiMove = [1, 3, 5][Math.floor(Math.random() * 3)];
-    } else if (Math.random() < 0.2) {
-      // Sometimes pick 2, 4, or 6 (even numbers)
-      aiMove = [2, 4, 6][Math.floor(Math.random() * 3)];
+    // More varied distribution based on game situation
+    if (userBatting && Math.random() < 0.3) {
+      // When player is batting, favor choices that might get them out
+      if (history.playerMoves.length >= 2) {
+        // Look at their recent choices and try to match one
+        const recentMoves = history.playerMoves.slice(-3);
+        aiMove = recentMoves[Math.floor(Math.random() * recentMoves.length)];
+      }
+    } else if (!userBatting && Math.random() < 0.3) {
+      // When AI is batting, favor high scoring choices
+      aiMove = [4, 5, 6][Math.floor(Math.random() * 3)];
     }
     
-    console.log(`Rule-based AI move: ${aiMove}`);
+    console.log(`Improved rule-based AI move: ${aiMove}`);
     return aiMove;
+  };
+
+  // Analyze player patterns to predict their next move
+  const analyzePlayerPatterns = (playerMoves: number[]): { 
+    mostCommonMove: number | null;
+    predictedNextMove: number | null;
+  } => {
+    // Need at least 3 moves to analyze patterns
+    if (playerMoves.length < 3) {
+      return { mostCommonMove: null, predictedNextMove: null };
+    }
+    
+    // Find most common move
+    const moveCounts: {[key: number]: number} = {};
+    playerMoves.forEach(move => {
+      moveCounts[move] = (moveCounts[move] || 0) + 1;
+    });
+    
+    let mostCommonMove = null;
+    let maxCount = 0;
+    
+    Object.entries(moveCounts).forEach(([move, count]) => {
+      if (count > maxCount) {
+        mostCommonMove = parseInt(move);
+        maxCount = count;
+      }
+    });
+    
+    // Try to predict next move based on patterns
+    let predictedNextMove = null;
+    
+    // Look for simple patterns like repetition
+    const lastMove = playerMoves[playerMoves.length - 1];
+    const secondLastMove = playerMoves[playerMoves.length - 2];
+    
+    // Check if player repeats moves
+    if (lastMove === secondLastMove) {
+      // They might repeat again
+      predictedNextMove = lastMove;
+    } 
+    // Check for alternating pattern (e.g., 1,2,1,2)
+    else if (playerMoves.length >= 4) {
+      const thirdLastMove = playerMoves[playerMoves.length - 3];
+      const fourthLastMove = playerMoves[playerMoves.length - 4];
+      
+      if (lastMove === thirdLastMove && secondLastMove === fourthLastMove) {
+        // Alternating pattern detected
+        predictedNextMove = secondLastMove;
+      }
+    }
+    
+    // If no pattern detected, predict the most common move
+    if (!predictedNextMove && mostCommonMove) {
+      predictedNextMove = mostCommonMove;
+    }
+    
+    return { 
+      mostCommonMove, 
+      predictedNextMove 
+    };
+  };
+
+  const resetHistory = () => {
+    setMoveHistory({
+      playerMoves: [],
+      aiMoves: []
+    });
   };
 
   return {
     getAiMove,
+    resetHistory,
     isLoading: state.isLoading,
     error: state.error,
   };

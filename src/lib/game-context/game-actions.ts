@@ -1,10 +1,13 @@
 
-import { GameState } from './game-types';
+import { GameState, GameStateType } from '../game-types';
+import { isGameOver } from '../game-utils';
 
-// Handle player out scenario
-export const handlePlayerOut = (
+// Handle all game actions
+export const handleGameActions = (
   state: GameState,
-  setGameState: (state: 'toss' | 'batting' | 'bowling' | 'gameOver') => void,
+  setGameState: (state: GameStateType) => void,
+  setPlayerScore: (score: number) => void,
+  setAiScore: (score: number) => void,
   setTarget: (target: number | null) => void,
   setUserBatting: (batting: boolean) => void,
   setIsOut: (isOut: boolean) => void,
@@ -12,7 +15,30 @@ export const handlePlayerOut = (
   setBallsPlayed: (balls: number) => void,
   resetChoices: () => void
 ): void => {
-  const { userBatting, playerScore, target } = state;
+  const { userBatting, playerChoice, aiChoice, isOut } = state;
+  
+  // Handle out case
+  if (isOut) {
+    handlePlayerOut(state, setGameState, setTarget, setUserBatting, setIsOut, setInnings, setBallsPlayed, resetChoices);
+    return;
+  }
+  
+  // Not out, update scores
+  updateScores(state, setPlayerScore, setAiScore, setGameState, resetChoices);
+};
+
+// Handle player out scenario
+export const handlePlayerOut = (
+  state: GameState,
+  setGameState: (state: GameStateType) => void,
+  setTarget: (target: number | null) => void,
+  setUserBatting: (batting: boolean) => void,
+  setIsOut: (isOut: boolean) => void,
+  setInnings: (innings: number) => void,
+  setBallsPlayed: (balls: number) => void,
+  resetChoices: () => void
+): void => {
+  const { userBatting, playerScore, aiScore, target } = state;
   
   if (userBatting) {
     handleBattingPlayerOut(
@@ -28,7 +54,8 @@ export const handlePlayerOut = (
     );
   } else {
     handleBowlingPlayerOut(
-      state,
+      aiScore,
+      target,
       setGameState,
       setTarget,
       setUserBatting,
@@ -44,7 +71,7 @@ export const handlePlayerOut = (
 const handleBattingPlayerOut = (
   playerScore: number,
   target: number | null,
-  setGameState: (state: 'toss' | 'batting' | 'bowling' | 'gameOver') => void,
+  setGameState: (state: GameStateType) => void,
   setTarget: (target: number | null) => void,
   setUserBatting: (batting: boolean) => void,
   setIsOut: (isOut: boolean) => void,
@@ -73,8 +100,9 @@ const handleBattingPlayerOut = (
 
 // Handle bowling player out
 const handleBowlingPlayerOut = (
-  state: GameState,
-  setGameState: (state: 'toss' | 'batting' | 'bowling' | 'gameOver') => void,
+  aiScore: number,
+  target: number | null,
+  setGameState: (state: GameStateType) => void,
   setTarget: (target: number | null) => void,
   setUserBatting: (batting: boolean) => void,
   setIsOut: (isOut: boolean) => void,
@@ -82,8 +110,6 @@ const handleBowlingPlayerOut = (
   setBallsPlayed: (balls: number) => void,
   resetChoices: () => void
 ): void => {
-  const { aiScore, target } = state;
-  
   if (target === null) {
     // First innings, set target for user
     setTarget(aiScore + 1);
@@ -108,9 +134,8 @@ export const updateScores = (
   state: GameState,
   setPlayerScore: (score: number) => void,
   setAiScore: (score: number) => void,
-  setGameState: (state: 'toss' | 'batting' | 'bowling' | 'gameOver') => void,
-  resetChoices: () => void,
-  isGameOver: (innings: number, score: number, target: number | null) => boolean
+  setGameState: (state: GameStateType) => void,
+  resetChoices: () => void
 ): void => {
   const { userBatting, playerScore, aiScore, playerChoice, aiChoice, innings, target } = state;
   
@@ -127,7 +152,7 @@ export const updateScores = (
       // Increased delay before resetting choices to make them visible longer
       setTimeout(() => {
         resetChoices();
-      }, 2500); // Increased from 1000ms to 2500ms
+      }, 4000); // Increased from 2500ms to 4000ms for better visibility
     }
   } else {
     const newScore = aiScore + aiChoice;
@@ -140,7 +165,7 @@ export const updateScores = (
       // Increased delay before resetting choices to make them visible longer
       setTimeout(() => {
         resetChoices();
-      }, 2500); // Increased from 1000ms to 2500ms
+      }, 4000); // Increased from 2500ms to 4000ms for better visibility
     }
   }
 };
