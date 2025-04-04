@@ -120,21 +120,25 @@ const Game = () => {
     });
   };
 
+  // Fix the transition to the next innings
   const handleContinueToNextInnings = () => {
     console.log("Handle continue to next innings called");
+    
+    // Important: hide the innings end overlay first
     setShowInningsEnd(false);
     
     // Make sure hand detector is active for second innings
-    if (!showHandDetector) {
-      setShowHandDetector(true);
-    }
+    setShowHandDetector(true);
     
-    // Display toast to inform player about second innings start
-    toast({
-      title: `Second Innings Started!`,
-      description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
-      duration: 3000,
-    });
+    // Minor delay to ensure UI updates before showing toast
+    setTimeout(() => {
+      // Display toast to inform player about second innings start
+      toast({
+        title: `Second Innings Started!`,
+        description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
+        duration: 3000,
+      });
+    }, 100);
   };
 
   const handleRestartGame = () => {

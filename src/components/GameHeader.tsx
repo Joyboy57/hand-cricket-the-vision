@@ -1,11 +1,11 @@
 
 import React from 'react';
 import { GooeyText } from '@/components/ui/gooey-text-morphing';
-import { GameState } from '@/lib/game-context';
+import { GameStateType } from '@/lib/game-types';
 import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
 
 interface GameHeaderProps {
-  gameState: GameState;
+  gameState: GameStateType;
   userName?: string;
   isCalibrating?: boolean;
   isProcessingGesture?: boolean;

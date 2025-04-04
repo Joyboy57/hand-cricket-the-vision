@@ -1,11 +1,11 @@
 
 import React from 'react';
 import { ButtonCta } from '@/components/ui/button-shiny';
-import { GameState } from '@/lib/game-context';
+import { GameStateType } from '@/lib/game-types';
 import TossControls from './TossControls';
 
 interface GameControlsProps {
-  gameState: GameState;
+  gameState: GameStateType;
   wonToss: boolean;
   countdown: number | null;
   playerScore: number;

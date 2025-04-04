@@ -27,6 +27,11 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
   onRestartGame,
   onContinueToNextInnings
 }) => {
+  // Handle the continue to next innings click properly
+  const handleContinueClick = () => {
+    onContinueToNextInnings();
+  };
+
   return (
     <>
       {/* Countdown display */}
@@ -67,7 +72,7 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
             aiScore={aiScore}
             target={target}
             onRestartGame={onRestartGame}
-            onContinueToNextInnings={onContinueToNextInnings}
+            onContinueToNextInnings={handleContinueClick}
           />
         </div>
       )}

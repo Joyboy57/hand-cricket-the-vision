@@ -40,8 +40,9 @@ const GameResults: React.FC<GameResultsProps> = ({
     navigate('/');
   };
 
+  // Fixed handler for Continue button
   const handleContinueClick = () => {
-    console.log("Continue to next innings clicked");
+    console.log("Continue button clicked in GameResults");
     if (isFirstInningsOver && !isGameOver) {
       onContinueToNextInnings();
     } else {
