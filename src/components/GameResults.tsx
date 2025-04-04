@@ -36,6 +36,11 @@ const GameResults: React.FC<GameResultsProps> = ({
     navigate('/');
   };
 
+  const handleContinueClick = () => {
+    // Make sure onRestartGame is properly called for continuing to next innings
+    onRestartGame();
+  };
+
   return (
     <div className="relative w-full max-w-lg p-6 bg-card/95 backdrop-blur-sm rounded-xl shadow-xl overflow-hidden">
       {/* Background effect */}
@@ -104,7 +109,7 @@ const GameResults: React.FC<GameResultsProps> = ({
       <div className="flex flex-col gap-3">
         <ButtonCta
           label={isGameOver ? "Play Again" : "Continue to Next Innings"}
-          onClick={onRestartGame}
+          onClick={handleContinueClick}
           className="w-full"
         />
         

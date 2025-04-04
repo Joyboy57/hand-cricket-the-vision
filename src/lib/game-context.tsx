@@ -117,11 +117,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setInnings(2);
       setBallsPlayed(0); // Reset balls played for second innings
       
-      // Small delay to let the OUT! message be seen
+      // Increased delay to let the OUT! message be seen longer
       setTimeout(() => {
         setPlayerChoice(null);
         setAiChoice(null);
-      }, 1500);
+      }, 3000); // Increased from 1500ms to 3000ms
     } else {
       // Second innings, game over
       setGameState('gameOver');
@@ -139,11 +139,11 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setInnings(2);
       setBallsPlayed(0); // Reset balls played for second innings
       
-      // Small delay to let the OUT! message be seen
+      // Increased delay to let the OUT! message be seen longer
       setTimeout(() => {
         setPlayerChoice(null);
         setAiChoice(null);
-      }, 1500);
+      }, 3000); // Increased from 1500ms to 3000ms
     } else {
       // Second innings, game over
       setGameState('gameOver');
@@ -160,12 +160,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (isGameOver(innings, newScore, target)) {
         setGameState('gameOver');
       } else {
-        // Reset choices after a short delay
+        // Increased delay before resetting choices to make them visible longer
         setTimeout(() => {
           setPlayerChoice(null);
           setAiChoice(null);
           setIsOut(false);
-        }, 1000);
+        }, 2500); // Increased from 1000ms to 2500ms
       }
     } else {
       const newScore = aiScore + aiMove;
@@ -175,12 +175,12 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (isGameOver(innings, newScore, target)) {
         setGameState('gameOver');
       } else {
-        // Reset choices after a short delay
+        // Increased delay before resetting choices to make them visible longer
         setTimeout(() => {
           setPlayerChoice(null);
           setAiChoice(null);
           setIsOut(false);
-        }, 1000);
+        }, 2500); // Increased from 1000ms to 2500ms
       }
     }
   };
