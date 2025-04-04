@@ -1,33 +1,12 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { generateAiMove, isPlayerOut, isGameOver } from './game-utils';
-
-// Game state types
-export type GameState = 'toss' | 'batting' | 'bowling' | 'gameOver';
-
-// Type for game context
-type GameContextType = {
-  gameState: GameState;
-  playerScore: number;
-  aiScore: number;
-  innings: number;
-  target: number | null;
-  playerChoice: number | null;
-  aiChoice: number | null;
-  userBatting: boolean;
-  isOut: boolean;
-  tossResult: string | null;
-  ballsPlayed: number;
-  startGame: (battingFirst: boolean) => void;
-  resetGame: () => void;
-  makeChoice: (userMove: number, aiMoveOverride?: number) => void;
-  chooseToss: (choice: 'heads' | 'tails') => void;
-  chooseBatOrBowl: (choice: 'bat' | 'bowl') => void;
-};
+import { isPlayerOut, isGameOver } from './game-utils';
+import { GameContextType, GameState as GameStateType } from './game-types';
+import { handlePlayerOut, updateScores } from './game-innings';
 
 // Initial state for game context
 const initialState = {
-  gameState: 'toss' as GameState,
+  gameState: 'toss' as GameStateType,
   playerScore: 0,
   aiScore: 0,
   innings: 1,
@@ -45,7 +24,7 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 
 // Provider component
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [gameState, setGameState] = useState<GameState>('toss');
+  const [gameState, setGameState] = useState<GameStateType>('toss');
   const [playerScore, setPlayerScore] = useState(0);
   const [aiScore, setAiScore] = useState(0);
   const [innings, setInnings] = useState(1);
@@ -71,6 +50,13 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setTossResult(null);
     setBallsPlayed(0);
   };
+  
+  // Reset choices without resetting the game
+  const resetChoices = () => {
+    setPlayerChoice(null);
+    setAiChoice(null);
+    setIsOut(false);
+  };
 
   // Handle user move with optional AI move override
   const makeChoice = (userMove: number, aiMoveOverride?: number) => {
@@ -78,7 +64,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       throw new Error('Invalid move: Must be between 1 and 6');
     }
 
-    const aiMove = aiMoveOverride !== undefined ? aiMoveOverride : generateAiMove();
+    const aiMove = aiMoveOverride !== undefined ? aiMoveOverride : Math.floor(Math.random() * 6) + 1;
     setPlayerChoice(userMove);
     setAiChoice(aiMove);
     
@@ -87,102 +73,60 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Check if out
     if (isPlayerOut(userMove, aiMove)) {
-      handlePlayerOut();
+      setIsOut(true);
+      
+      // Get current state
+      const currentState = {
+        gameState,
+        playerScore,
+        aiScore,
+        innings,
+        target,
+        playerChoice: userMove,
+        aiChoice: aiMove,
+        userBatting,
+        isOut: true,
+        tossResult,
+        ballsPlayed: ballsPlayed + 1,
+      };
+      
+      // Handle player out using the extracted logic
+      handlePlayerOut(
+        currentState,
+        setGameState,
+        setTarget,
+        setUserBatting,
+        setIsOut,
+        setInnings,
+        setBallsPlayed,
+        resetChoices
+      );
       return;
     }
 
     // Not out, update scores
-    updateScores(userMove, aiMove);
-  };
-
-  // Handle player out scenario
-  const handlePlayerOut = () => {
-    setIsOut(true);
+    const currentState = {
+      gameState,
+      playerScore,
+      aiScore,
+      innings,
+      target,
+      playerChoice: userMove,
+      aiChoice: aiMove,
+      userBatting,
+      isOut,
+      tossResult,
+      ballsPlayed: ballsPlayed + 1,
+    };
     
-    if (userBatting) {
-      handleBattingPlayerOut();
-    } else {
-      handleBowlingPlayerOut();
-    }
-  };
-
-  // Handle batting player out
-  const handleBattingPlayerOut = () => {
-    if (target === null) {
-      // First innings, set target for AI
-      setTarget(playerScore + 1);
-      setUserBatting(false);
-      setIsOut(false);
-      setGameState('bowling');
-      setInnings(2);
-      setBallsPlayed(0); // Reset balls played for second innings
-      
-      // Increased delay to let the OUT! message be seen longer
-      setTimeout(() => {
-        setPlayerChoice(null);
-        setAiChoice(null);
-      }, 3000); // Increased from 1500ms to 3000ms
-    } else {
-      // Second innings, game over
-      setGameState('gameOver');
-    }
-  };
-
-  // Handle bowling player out
-  const handleBowlingPlayerOut = () => {
-    if (target === null) {
-      // First innings, set target for user
-      setTarget(aiScore + 1);
-      setUserBatting(true);
-      setIsOut(false);
-      setGameState('batting');
-      setInnings(2);
-      setBallsPlayed(0); // Reset balls played for second innings
-      
-      // Increased delay to let the OUT! message be seen longer
-      setTimeout(() => {
-        setPlayerChoice(null);
-        setAiChoice(null);
-      }, 3000); // Increased from 1500ms to 3000ms
-    } else {
-      // Second innings, game over
-      setGameState('gameOver');
-    }
-  };
-
-  // Update scores based on player and AI choices
-  const updateScores = (userMove: number, aiMove: number) => {
-    if (userBatting) {
-      const newScore = playerScore + userMove;
-      setPlayerScore(newScore);
-      
-      // Check if target achieved in second innings
-      if (isGameOver(innings, newScore, target)) {
-        setGameState('gameOver');
-      } else {
-        // Increased delay before resetting choices to make them visible longer
-        setTimeout(() => {
-          setPlayerChoice(null);
-          setAiChoice(null);
-          setIsOut(false);
-        }, 2500); // Increased from 1000ms to 2500ms
-      }
-    } else {
-      const newScore = aiScore + aiMove;
-      setAiScore(newScore);
-      
-      // Check if target achieved in second innings
-      if (isGameOver(innings, newScore, target)) {
-        setGameState('gameOver');
-      } else {
-        // Increased delay before resetting choices to make them visible longer
-        setTimeout(() => {
-          setPlayerChoice(null);
-          setAiChoice(null);
-          setIsOut(false);
-        }, 2500); // Increased from 1000ms to 2500ms
-      }
-    }
+    updateScores(
+      currentState,
+      setPlayerScore,
+      setAiScore,
+      setGameState,
+      resetChoices,
+      isGameOver
+    );
   };
 
   // Start game after toss
@@ -192,9 +136,7 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setBallsPlayed(0); // Reset balls played at the start of the game
     
     // Clear any previous choices when starting a new game
-    setPlayerChoice(null);
-    setAiChoice(null);
-    setIsOut(false);
+    resetChoices();
   };
 
   // Handle toss choice
@@ -210,9 +152,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setUserBatting(!aiChoice);
       // We don't set gameState here, this is handled by the UI
     }
-    
-    // If user won, they need to choose bat or bowl
-    // This will be handled by chooseBatOrBowl
   };
 
   // Handle bat or bowl choice after winning toss

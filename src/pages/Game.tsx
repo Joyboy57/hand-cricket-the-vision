@@ -5,19 +5,17 @@ import { useAuth } from '@/lib/auth';
 import { useGame } from '@/lib/game-context';
 import { Waves } from '@/components/ui/waves-background';
 import { Button } from '@/components/ui/button';
-import HandGestureDetector from '@/components/HandGestureDetector';
-import GameResults from '@/components/GameResults';
-import { useTheme } from 'next-themes';
 import { toast } from '@/hooks/use-toast';
 import { Pause } from 'lucide-react';
-import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
+import { useTheme } from 'next-themes';
 import PauseMenu from '@/components/PauseMenu';
 import GameHeader from '@/components/GameHeader';
 import ScoreDisplay from '@/components/ScoreDisplay';
 import GameInfo from '@/components/GameInfo';
 import GameControls from '@/components/GameControls';
-import { HyperText } from '@/components/ui/hyper-text';
 import { useAiOpponent } from '@/hooks/useAiOpponent';
+import GameCamera from '@/components/GameCamera';
+import GameOverlay from '@/components/GameOverlay';
 
 const Game = () => {
   const { user } = useAuth();
@@ -48,10 +46,7 @@ const Game = () => {
   const [aiThinking, setAiThinking] = useState(false);
   const [showInningsEnd, setShowInningsEnd] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
-  const [calibrationComplete, setCalibrationComplete] = useState(false);
-  const [handDetected, setHandDetected] = useState(false);
   const countdownActiveRef = useRef(false);
-  const gestureProcessingRef = useRef(false);
   const { getAiMove } = useAiOpponent();
   
   // Handle player/AI choice updates
@@ -83,49 +78,8 @@ const Game = () => {
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
   const handleGestureDetected = (gesture: number) => {
-    if (calibrationComplete && 
-        (gameState === 'batting' || gameState === 'bowling') && 
-        !isPaused && 
-        !showInningsEnd && 
-        !showGameOver &&
-        !gestureProcessingRef.current) {
-      
-      setHandDetected(true);
-      
-      if (gesture >= 1 && gesture <= 6) {
-        gestureProcessingRef.current = true;
-        
-        console.log(`Gesture detected: ${gesture}`);
-        
-        toast({
-          title: `Gesture detected: ${gesture}`,
-          description: gesture === 6 ? "Thumbs up! 👍" : `${gesture} finger${gesture > 1 ? 's' : ''}`,
-          duration: 1000,
-        });
-        
-        // Submit user's choice (AI move will be calculated in the effect above)
-        makeChoice(gesture);
-        
-        setTimeout(() => {
-          gestureProcessingRef.current = false;
-        }, 1000);
-      }
-    }
-  };
-
-  const handleCalibrationComplete = () => {
-    setCalibrationComplete(true);
-    toast({
-      title: "Calibration complete!",
-      description: "You can now play. Show 1-5 fingers or thumbs up (6).",
-      duration: 3000,
-    });
-  };
-
-  const handleCameraStatusChange = (isActive: boolean) => {
-    if (!isActive) {
-      setHandDetected(false);
-    }
+    // Submit user's choice (AI move will be calculated in the effect above)
+    makeChoice(gesture);
   };
 
   const handleTossChoice = (choice: 'heads' | 'tails') => {
@@ -189,8 +143,6 @@ const Game = () => {
     setShowInningsEnd(false);
     setShowGameOver(false);
     setShowHandDetector(false);
-    setCalibrationComplete(false);
-    setHandDetected(false);
   };
 
   const handlePause = () => {
@@ -244,50 +196,22 @@ const Game = () => {
         <GameHeader 
           gameState={gameState} 
           userName={user?.name} 
-          isCalibrating={!calibrationComplete && showHandDetector}
+          isCalibrating={showHandDetector && !showGameOver && !showInningsEnd}
           isProcessingGesture={aiThinking}
           isCamera={showHandDetector}
         />
         
-        {/* Countdown display without overlays */}
-        {countdown !== null && (
-          <div className="text-center my-2">
-            <HyperText
-              className="text-3xl font-bold text-primary"
-              text={countdown.toString()}
-              duration={800}
-            />
-          </div>
-        )}
-        
-        {aiThinking && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center">
-            <div className="text-center bg-background/80 p-8 rounded-xl">
-              <TextShimmerWave
-                className="text-2xl font-bold mb-2 [--base-color:#3b82f6] [--base-gradient-color:#60a5fa]"
-                duration={1.5}
-                spread={1.2}
-                zDistance={20}
-              >
-                AI is thinking...
-              </TextShimmerWave>
-              <p className="text-muted-foreground mt-2">Please wait while the AI makes its move</p>
-            </div>
-          </div>
-        )}
-        
-        {(showInningsEnd || showGameOver) && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center">
-            <GameResults 
-              isGameOver={showGameOver}
-              isFirstInningsOver={showInningsEnd && !showGameOver}
-              playerScore={playerScore}
-              aiScore={aiScore}
-              target={target}
-              onRestartGame={showGameOver ? handleRestartGame : handleContinueToNextInnings}
-            />
-          </div>
-        )}
+        <GameOverlay
+          aiThinking={aiThinking}
+          countdown={countdown}
+          showInningsEnd={showInningsEnd}
+          showGameOver={showGameOver}
+          playerScore={playerScore}
+          aiScore={aiScore}
+          target={target}
+          onRestartGame={handleRestartGame}
+          onContinueToNextInnings={handleContinueToNextInnings}
+        />
         
         <div className="flex flex-col md:flex-row gap-6">
           <div className="flex-1 flex flex-col gap-4">
@@ -321,20 +245,15 @@ const Game = () => {
           </div>
           
           <div className="flex-1">
-            {showHandDetector ? (
-              <HandGestureDetector 
-                onGestureDetected={handleGestureDetected} 
-                disabled={isPaused || showInningsEnd || showGameOver || gestureProcessingRef.current}
-                onCalibrationComplete={handleCalibrationComplete}
-                onCameraStatusChange={handleCameraStatusChange}
-              />
-            ) : (
-              <div className="bg-background/80 p-6 rounded-lg h-full flex items-center justify-center">
-                <p className="text-center text-muted-foreground">
-                  Complete the toss to start the game and enable hand tracking.
-                </p>
-              </div>
-            )}
+            <GameCamera
+              onGestureDetected={handleGestureDetected}
+              disabled={isPaused}
+              showHandDetector={showHandDetector}
+              gameState={gameState}
+              isPaused={isPaused}
+              showInningsEnd={showInningsEnd}
+              showGameOver={showGameOver}
+            />
           </div>
         </div>
       </div>
