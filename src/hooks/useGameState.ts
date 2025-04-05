@@ -1,5 +1,6 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useGame } from '@/lib/game-context';
 
 export const useGameState = () => {
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -10,6 +11,18 @@ export const useGameState = () => {
   const [aiThinking, setAiThinking] = useState(false);
   const [showInningsEnd, setShowInningsEnd] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
+  
+  // Get game context to monitor state changes
+  const { gameState, innings } = useGame();
+  
+  // Reset innings end display when game state changes
+  useEffect(() => {
+    // If we're now in the second innings and still showing innings end, hide it
+    if ((gameState === 'batting' || gameState === 'bowling') && innings === 2 && showInningsEnd) {
+      console.log("Auto-hiding innings end screen because we're now in second innings", {gameState, innings});
+      setShowInningsEnd(false);
+    }
+  }, [gameState, innings, showInningsEnd]);
   
   const resetGameState = () => {
     setCountdown(null);

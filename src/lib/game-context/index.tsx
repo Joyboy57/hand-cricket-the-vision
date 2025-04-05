@@ -77,6 +77,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Handle declaration of innings
   const declareInnings = useCallback(() => {
     if (innings === 1 && userBatting) {
+      console.log("Declaring innings", {innings, playerScore});
+      
       // Set target for AI (current score + 1)
       setTarget(playerScore + 1);
       

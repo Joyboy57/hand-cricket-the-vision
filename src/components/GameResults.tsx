@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { ButtonCta } from '@/components/ui/button-shiny';
@@ -40,12 +39,11 @@ const GameResults: React.FC<GameResultsProps> = ({
     navigate('/');
   };
 
-  // Directly call the parent handler with no additional logic
+  // Don't call the parent handler directly to prevent multiple calls
   const handleContinueClick = () => {
-    console.log("Continue button clicked in GameResults");
     if (isGameOver) {
       onRestartGame();
-    } else {
+    } else if (isFirstInningsOver) {
       onContinueToNextInnings();
     }
   };

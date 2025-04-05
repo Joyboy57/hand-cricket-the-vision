@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
 import GameResults from '@/components/GameResults';
 import { HyperText } from '@/components/ui/hyper-text';

@@ -1,4 +1,3 @@
-
 // MediaPipe service for hand gesture recognition
 export class MediaPipeService {
   private hands: any;
@@ -379,44 +378,26 @@ export class MediaPipeService {
     // For thumbs up (gesture 6) - only thumb is extended
     if (consistentlyExtended[0] && !consistentlyExtended[1] && !consistentlyExtended[2] && 
         !consistentlyExtended[3] && !consistentlyExtended[4]) {
-      return 6;
+      return 6; // Thumbs up
     }
     
-    // For improved detection between 4 and 5
-    const allFingers = consistentlyExtended.slice(1).filter(f => f).length;
+    // FIXED: More explicit detection of gestures 4 and 5
+    // Count of extended fingers (excluding thumb)
+    const extendedFingerCount = consistentlyExtended.slice(1).filter(Boolean).length;
     
-    // For Open hand (gesture 5) - all regular fingers must be extended AND
-    // we need to check thumb position relative to palm to distinguish from 4
-    if (allFingers === 4) {
-      // For gesture 5, thumb should also be clearly extended/visible
-      // Check if thumb is clearly out to the side of the hand
-      const thumbTip = landmarks[4]; 
-      const indexBase = landmarks[5]; // Index finger base
-      const pinkyBase = landmarks[17]; // Pinky base
-      
-      // Get the hand orientation (left/right)
-      const isRightHand = pinkyBase.x < indexBase.x;
-      
-      // Check if thumb is clearly separated from palm
-      let thumbClearlyVisible = false;
-      
-      if (isRightHand) {
-        // For right hand, thumb should be clearly to the left of index base
-        thumbClearlyVisible = thumbTip.x < indexBase.x - 0.05;
-      } else {
-        // For left hand, thumb should be clearly to the right of index base
-        thumbClearlyVisible = thumbTip.x > indexBase.x + 0.05;
-      }
-      
-      if (thumbClearlyVisible || consistentlyExtended[0]) {
-        return 5; // Open hand with thumb visible
-      }
-      return 4; // Four fingers up but thumb not clearly visible
+    // For gesture 5 (all 5 fingers) - must have thumb AND all four fingers extended
+    if (extendedFingerCount === 4 && consistentlyExtended[0]) {
+      return 5; // All five fingers extended
     }
     
-    // Count extended fingers (excluding thumb) for gestures 1-3
-    if (allFingers >= 1 && allFingers <= 3) {
-      return allFingers;
+    // For gesture 4 - four fingers extended but NOT thumb
+    if (extendedFingerCount === 4 && !consistentlyExtended[0]) {
+      return 4; // Four fingers extended (not thumb)
+    }
+    
+    // For gestures 1-3 - count the non-thumb fingers
+    if (extendedFingerCount >= 1 && extendedFingerCount <= 3) {
+      return extendedFingerCount;
     }
     
     // Default case - no recognized gesture

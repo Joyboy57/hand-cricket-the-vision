@@ -85,15 +85,17 @@ const handleBattingPlayerOut = (
     setUserBatting(false);
     setIsOut(false);
     setGameState('bowling');
-    setInnings(2);
+    setInnings(2); // This will trigger inningsEnd screen
     setBallsPlayed(0); // Reset balls played for second innings
+    console.log("First innings complete. Setting target:", playerScore + 1);
     
     // Increased delay to let the OUT! message be seen longer
     setTimeout(() => {
       resetChoices();
-    }, 3000);
+    }, 1000); // Reduced delay to prevent multiple UI states
   } else {
     // Second innings, game over
+    console.log("Game over - player out in second innings");
     setGameState('gameOver');
   }
 };
@@ -116,15 +118,17 @@ const handleBowlingPlayerOut = (
     setUserBatting(true);
     setIsOut(false);
     setGameState('batting');
-    setInnings(2);
+    setInnings(2); // This will trigger inningsEnd screen
     setBallsPlayed(0); // Reset balls played for second innings
+    console.log("First innings complete. Setting target:", aiScore + 1);
     
     // Increased delay to let the OUT! message be seen longer
     setTimeout(() => {
       resetChoices();
-    }, 3000);
+    }, 1000); // Reduced delay to prevent multiple UI states
   } else {
     // Second innings, game over
+    console.log("Game over - AI out in second innings");
     setGameState('gameOver');
   }
 };
@@ -147,12 +151,13 @@ export const updateScores = (
     
     // Check if target achieved in second innings
     if (isGameOver(innings, newScore, target)) {
+      console.log("Game over - player achieved target");
       setGameState('gameOver');
     } else {
       // Increased delay before resetting choices to make them visible longer
       setTimeout(() => {
         resetChoices();
-      }, 4000); // Increased from 2500ms to 4000ms for better visibility
+      }, 2000); // Reduced from 4000ms to 2000ms to improve game flow
     }
   } else {
     const newScore = aiScore + aiChoice;
@@ -160,12 +165,13 @@ export const updateScores = (
     
     // Check if target achieved in second innings
     if (isGameOver(innings, newScore, target)) {
+      console.log("Game over - AI achieved target");
       setGameState('gameOver');
     } else {
       // Increased delay before resetting choices to make them visible longer
       setTimeout(() => {
         resetChoices();
-      }, 4000); // Increased from 2500ms to 4000ms for better visibility
+      }, 2000); // Reduced from 4000ms to 2000ms to improve game flow
     }
   }
 };

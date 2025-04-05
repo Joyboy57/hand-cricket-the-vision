@@ -62,6 +62,7 @@ const Game = () => {
   
   const { getAiMove, resetHistory } = useAiOpponent();
   
+  // Process AI moves
   useEffect(() => {
     if (playerChoice !== null && aiChoice === null) {
       setAiThinking(true);
@@ -76,13 +77,18 @@ const Game = () => {
     }
   }, [playerChoice, aiChoice]);
   
+  // Show innings end or game over screens
   useEffect(() => {
-    if (innings === 2 && target !== null && !showInningsEnd) {
+    // Only show innings end when explicitly moving to innings 2 and not already showing
+    if (innings === 2 && target !== null && !showInningsEnd && !showGameOver && gameState !== 'gameOver') {
+      console.log("Setting showInningsEnd to true", {innings, target, showInningsEnd, showGameOver, gameState});
       setShowInningsEnd(true);
     }
     
     if (gameState === 'gameOver' && !showGameOver) {
+      console.log("Setting showGameOver to true", {gameState, showGameOver});
       setShowGameOver(true);
+      setShowInningsEnd(false); // Ensure innings end doesn't show during game over
     }
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
@@ -129,23 +135,22 @@ const Game = () => {
     });
   };
 
+  // FIXED: Completely rewrote this function to ensure proper transition
   const handleContinueToNextInnings = () => {
-    console.log("Handle continue to next innings called in Game.tsx");
+    console.log("Continue to next innings clicked", {showInningsEnd, innings, userBatting});
     
-    // First hide the innings end screen
+    // First hide the innings end screen immediately to prevent multiple clicks
     setShowInningsEnd(false);
     
-    // Slight delay to ensure UI updates before showing hand detector
-    setTimeout(() => {
-      // Then show hand detector for next innings
-      setShowHandDetector(true);
-      
-      toast({
-        title: `Second Innings Started!`,
-        description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
-        duration: 3000,
-      });
-    }, 300);
+    // Make sure hand detector is shown for the next innings
+    setShowHandDetector(true);
+    
+    // Show toast notification
+    toast({
+      title: `Second Innings Started!`,
+      description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
+      duration: 3000,
+    });
   };
 
   const handleRestartGame = () => {
