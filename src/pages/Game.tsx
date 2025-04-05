@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -50,6 +49,7 @@ const Game = () => {
     aiThinking,
     showInningsEnd,
     showGameOver,
+    inningsTransitionInProgress,
     setCountdown,
     setShowHandDetector,
     setWonToss,
@@ -57,12 +57,13 @@ const Game = () => {
     setSoundEnabled,
     setAiThinking,
     setShowInningsEnd,
-    setShowGameOver
+    setShowGameOver,
+    setInningsTransitionInProgress,
+    resetGameState
   } = useGameState();
   
   const { getAiMove, resetHistory } = useAiOpponent();
   
-  // Process AI moves
   useEffect(() => {
     if (playerChoice !== null && aiChoice === null) {
       setAiThinking(true);
@@ -77,9 +78,7 @@ const Game = () => {
     }
   }, [playerChoice, aiChoice]);
   
-  // Show innings end or game over screens
   useEffect(() => {
-    // Only show innings end when explicitly moving to innings 2 and not already showing
     if (innings === 2 && target !== null && !showInningsEnd && !showGameOver && gameState !== 'gameOver') {
       console.log("Setting showInningsEnd to true", {innings, target, showInningsEnd, showGameOver, gameState});
       setShowInningsEnd(true);
@@ -88,7 +87,7 @@ const Game = () => {
     if (gameState === 'gameOver' && !showGameOver) {
       console.log("Setting showGameOver to true", {gameState, showGameOver});
       setShowGameOver(true);
-      setShowInningsEnd(false); // Ensure innings end doesn't show during game over
+      setShowInningsEnd(false);
     }
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
@@ -135,22 +134,26 @@ const Game = () => {
     });
   };
 
-  // FIXED: Completely rewrote this function to ensure proper transition
   const handleContinueToNextInnings = () => {
+    if (inningsTransitionInProgress) {
+      console.log("Transition already in progress, ignoring click");
+      return;
+    }
+    
     console.log("Continue to next innings clicked", {showInningsEnd, innings, userBatting});
     
-    // First hide the innings end screen immediately to prevent multiple clicks
-    setShowInningsEnd(false);
+    setInningsTransitionInProgress(true);
     
-    // Make sure hand detector is shown for the next innings
+    setShowInningsEnd(false);
     setShowHandDetector(true);
     
-    // Show toast notification
-    toast({
-      title: `Second Innings Started!`,
-      description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
-      duration: 3000,
-    });
+    setTimeout(() => {
+      toast({
+        title: `Second Innings Started!`,
+        description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
+        duration: 3000,
+      });
+    }, 300);
   };
 
   const handleRestartGame = () => {

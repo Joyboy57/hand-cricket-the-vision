@@ -1,8 +1,9 @@
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
 import GameResults from '@/components/GameResults';
 import { HyperText } from '@/components/ui/hyper-text';
+import InningsTransition from '@/components/InningsTransition';
 
 interface GameOverlayProps {
   aiThinking: boolean;
@@ -57,12 +58,23 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
         </div>
       )}
       
-      {/* Game results overlay - only show ONE of these at a time */}
-      {(showInningsEnd || showGameOver) && (
+      {/* Game transition overlays - only show ONE of these at a time */}
+      {showInningsEnd && !showGameOver && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center">
+          <InningsTransition
+            playerScore={playerScore}
+            aiScore={aiScore}
+            target={target}
+            onContinue={onContinueToNextInnings}
+          />
+        </div>
+      )}
+      
+      {showGameOver && (
         <div className="absolute inset-0 z-50 flex items-center justify-center">
           <GameResults 
-            isGameOver={showGameOver}
-            isFirstInningsOver={showInningsEnd && !showGameOver}
+            isGameOver={true}
+            isFirstInningsOver={false}
             playerScore={playerScore}
             aiScore={aiScore}
             target={target}

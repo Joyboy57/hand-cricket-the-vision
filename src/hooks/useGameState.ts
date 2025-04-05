@@ -11,6 +11,7 @@ export const useGameState = () => {
   const [aiThinking, setAiThinking] = useState(false);
   const [showInningsEnd, setShowInningsEnd] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
+  const [inningsTransitionInProgress, setInningsTransitionInProgress] = useState(false);
   
   // Get game context to monitor state changes
   const { gameState, innings } = useGame();
@@ -21,6 +22,7 @@ export const useGameState = () => {
     if ((gameState === 'batting' || gameState === 'bowling') && innings === 2 && showInningsEnd) {
       console.log("Auto-hiding innings end screen because we're now in second innings", {gameState, innings});
       setShowInningsEnd(false);
+      setInningsTransitionInProgress(false);
     }
   }, [gameState, innings, showInningsEnd]);
   
@@ -32,6 +34,7 @@ export const useGameState = () => {
     setAiThinking(false);
     setShowInningsEnd(false);
     setShowGameOver(false);
+    setInningsTransitionInProgress(false);
   };
   
   return {
@@ -43,6 +46,7 @@ export const useGameState = () => {
     aiThinking,
     showInningsEnd,
     showGameOver,
+    inningsTransitionInProgress,
     setCountdown,
     setShowHandDetector,
     setWonToss,
@@ -51,6 +55,7 @@ export const useGameState = () => {
     setAiThinking,
     setShowInningsEnd,
     setShowGameOver,
+    setInningsTransitionInProgress,
     resetGameState
   };
 };

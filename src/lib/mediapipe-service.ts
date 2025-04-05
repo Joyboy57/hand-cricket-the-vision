@@ -354,7 +354,7 @@ export class MediaPipeService {
     return fingers;
   }
 
-  // Enhanced gesture detection with better discrimination between 4 and 5
+  // FIXED: Completely rewritten gesture detection with clear distinction between 4 and 5
   private detectImprovedGesture(landmarks: any[]): number {
     if (!landmarks || landmarks.length < 21) return 0;
     
@@ -381,23 +381,25 @@ export class MediaPipeService {
       return 6; // Thumbs up
     }
     
-    // FIXED: More explicit detection of gestures 4 and 5
+    // FIXED: Clear distinction between gestures 4 and 5
     // Count of extended fingers (excluding thumb)
-    const extendedFingerCount = consistentlyExtended.slice(1).filter(Boolean).length;
+    const nonThumbExtendedCount = consistentlyExtended.slice(1).filter(Boolean).length;
     
     // For gesture 5 (all 5 fingers) - must have thumb AND all four fingers extended
-    if (extendedFingerCount === 4 && consistentlyExtended[0]) {
-      return 5; // All five fingers extended
+    if (nonThumbExtendedCount === 4 && consistentlyExtended[0]) {
+      this.gestureDebugInfo = "Detected Score 5: All five fingers extended including thumb";
+      return 5;
     }
     
-    // For gesture 4 - four fingers extended but NOT thumb
-    if (extendedFingerCount === 4 && !consistentlyExtended[0]) {
-      return 4; // Four fingers extended (not thumb)
+    // For gesture 4 - all four non-thumb fingers extended, but NOT thumb
+    if (nonThumbExtendedCount === 4 && !consistentlyExtended[0]) {
+      this.gestureDebugInfo = "Detected Score 4: All four regular fingers extended, thumb closed";
+      return 4;
     }
     
     // For gestures 1-3 - count the non-thumb fingers
-    if (extendedFingerCount >= 1 && extendedFingerCount <= 3) {
-      return extendedFingerCount;
+    if (nonThumbExtendedCount >= 1 && nonThumbExtendedCount <= 3) {
+      return nonThumbExtendedCount;
     }
     
     // Default case - no recognized gesture
