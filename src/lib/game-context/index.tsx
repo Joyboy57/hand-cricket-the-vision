@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect, useCa
 import { GameContextType, GameStateType, GameState, PlayerStatistics } from '../game-types';
 import { handleGameActions } from './game-actions';
 import { INITIAL_STATISTICS, loadStatistics, saveStatistics } from './statistics';
+import { useGameControls } from './hooks/useGameControls';
 
 // Initial state for game context
 const initialState: GameState = {
@@ -38,6 +39,40 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [ballsPlayed, setBallsPlayed] = useState(0);
   const [statistics, setStatistics] = useState<PlayerStatistics>(INITIAL_STATISTICS);
   const [cameraKey, setCameraKey] = useState(0); // For camera refresh
+  
+  // Game controls hook
+  const { 
+    resetGame, 
+    resetChoices, 
+    makeChoice, 
+    startGame, 
+    chooseToss, 
+    chooseBatOrBowl 
+  } = useGameControls({
+    setGameState,
+    setPlayerScore,
+    setAiScore,
+    setInnings,
+    setTarget,
+    setUserBatting,
+    setPlayerChoice,
+    setAiChoice,
+    setIsOut,
+    setTossResult,
+    setBallsPlayed,
+    gameState,
+    playerScore,
+    aiScore,
+    innings,
+    target,
+    playerChoice,
+    aiChoice,
+    userBatting,
+    isOut,
+    tossResult,
+    ballsPlayed,
+    statistics
+  });
 
   // Load statistics on initial load
   useEffect(() => {
@@ -76,28 +111,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [gameState]);
 
-  // Reset game state
-  const resetGame = () => {
-    setGameState('toss');
-    setPlayerScore(0);
-    setAiScore(0);
-    setInnings(1);
-    setTarget(null);
-    setUserBatting(false);
-    setPlayerChoice(null);
-    setAiChoice(null);
-    setIsOut(false);
-    setTossResult(null);
-    setBallsPlayed(0);
-  };
-  
-  // Reset choices without resetting the game
-  const resetChoices = () => {
-    setPlayerChoice(null);
-    setAiChoice(null);
-    setIsOut(false);
-  };
-
   // Refresh camera by updating key
   const refreshCamera = useCallback(() => {
     setCameraKey(prev => prev + 1);
@@ -114,76 +127,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [refreshCamera]);
-
-  // Handle user move with optional AI move override
-  const makeChoice = (userMove: number, aiMoveOverride?: number) => {
-    if (userMove < 1 || userMove > 6) {
-      throw new Error('Invalid move: Must be between 1 and 6');
-    }
-
-    const aiMove = aiMoveOverride !== undefined ? aiMoveOverride : Math.floor(Math.random() * 6) + 1;
-    setPlayerChoice(userMove);
-    setAiChoice(aiMove);
-    
-    // Increment balls played
-    setBallsPlayed(prev => prev + 1);
-
-    const currentState: GameState = {
-      gameState,
-      playerScore,
-      aiScore,
-      innings,
-      target,
-      playerChoice: userMove,
-      aiChoice: aiMove,
-      userBatting,
-      isOut: userMove === aiMove,
-      tossResult,
-      ballsPlayed: ballsPlayed + 1,
-      statistics
-    };
-    
-    handleGameActions(
-      currentState,
-      setGameState,
-      setPlayerScore,
-      setAiScore,
-      setTarget,
-      setUserBatting,
-      setIsOut,
-      setInnings,
-      setBallsPlayed,
-      resetChoices
-    );
-  };
-
-  // Start game after toss
-  const startGame = (battingFirst: boolean) => {
-    setUserBatting(battingFirst);
-    setGameState(battingFirst ? 'batting' : 'bowling');
-    setBallsPlayed(0);
-    resetChoices();
-  };
-
-  // Handle toss choice
-  const chooseToss = (choice: 'heads' | 'tails') => {
-    const tossOutcome = Math.random() > 0.5 ? 'heads' : 'tails';
-    const userWonToss = choice === tossOutcome;
-    
-    setTossResult(userWonToss ? 'You won the toss!' : 'AI won the toss!');
-    
-    if (!userWonToss) {
-      // AI chooses to bat or bowl
-      const aiChoice = Math.random() > 0.5;
-      setUserBatting(!aiChoice);
-    }
-  };
-
-  // Handle bat or bowl choice after winning toss
-  const chooseBatOrBowl = (choice: 'bat' | 'bowl') => {
-    setUserBatting(choice === 'bat');
-    setGameState(choice === 'bat' ? 'batting' : 'bowling');
-  };
 
   return (
     <GameContext.Provider

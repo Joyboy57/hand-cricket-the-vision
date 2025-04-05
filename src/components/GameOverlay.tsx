@@ -27,7 +27,6 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
   onRestartGame,
   onContinueToNextInnings
 }) => {
-  // Directly pass the continue handler without wrapping
   return (
     <>
       {/* Countdown display */}

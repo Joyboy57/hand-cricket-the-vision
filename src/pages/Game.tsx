@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -15,6 +16,7 @@ import GameControls from '@/components/GameControls';
 import { useAiOpponent } from '@/hooks/useAiOpponent';
 import GameCamera from '@/components/GameCamera';
 import GameOverlay from '@/components/GameOverlay';
+import { useGameState } from '@/hooks/useGameState';
 
 const Game = () => {
   const { user } = useAuth();
@@ -37,14 +39,24 @@ const Game = () => {
     chooseToss,
   } = useGame();
   
-  const [countdown, setCountdown] = useState<number | null>(null);
-  const [showHandDetector, setShowHandDetector] = useState(false);
-  const [wonToss, setWonToss] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [aiThinking, setAiThinking] = useState(false);
-  const [showInningsEnd, setShowInningsEnd] = useState(false);
-  const [showGameOver, setShowGameOver] = useState(false);
+  const {
+    countdown,
+    showHandDetector,
+    wonToss,
+    isPaused,
+    soundEnabled,
+    aiThinking,
+    showInningsEnd,
+    showGameOver,
+    setShowHandDetector,
+    setWonToss,
+    setIsPaused,
+    setSoundEnabled,
+    setAiThinking,
+    setShowInningsEnd,
+    setShowGameOver
+  } = useGameState();
+  
   const { getAiMove, resetHistory } = useAiOpponent();
   
   useEffect(() => {
@@ -117,6 +129,7 @@ const Game = () => {
   const handleContinueToNextInnings = () => {
     console.log("Handle continue to next innings called in Game.tsx");
     
+    // Important: Force this state update to happen immediately
     setShowInningsEnd(false);
     setShowHandDetector(true);
     
@@ -126,7 +139,7 @@ const Game = () => {
         description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
         duration: 3000,
       });
-    }, 200);
+    }, 500);
   };
 
   const handleRestartGame = () => {
