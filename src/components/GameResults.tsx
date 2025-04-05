@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 import { ButtonCta } from '@/components/ui/button-shiny';
@@ -40,14 +39,15 @@ const GameResults: React.FC<GameResultsProps> = ({
     navigate('/');
   };
 
-  // Fixed handler for Continue button
-  const handleContinueClick = () => {
-    console.log("Continue button clicked in GameResults");
-    if (isFirstInningsOver && !isGameOver) {
-      onContinueToNextInnings();
-    } else {
-      onRestartGame();
-    }
+  // Fixed handler for Continue button - direct call with explicit preventDefault
+  const handleContinueClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log("Continue button clicked in GameResults - calling parent handler directly");
+    
+    // Direct call to the parent handler
+    onContinueToNextInnings();
   };
 
   return (

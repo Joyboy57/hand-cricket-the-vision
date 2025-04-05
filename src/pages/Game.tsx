@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -48,13 +47,10 @@ const Game = () => {
   const [showGameOver, setShowGameOver] = useState(false);
   const { getAiMove, resetHistory } = useAiOpponent();
   
-  // Handle player/AI choice updates
   useEffect(() => {
     if (playerChoice !== null && aiChoice === null) {
-      // AI is thinking - perform AI move calculation
       setAiThinking(true);
       
-      // Use AI opponent to generate the AI's move
       const timer = setTimeout(async () => {
         const aiMove = await getAiMove(playerChoice, userBatting, ballsPlayed, playerScore, aiScore, innings);
         makeChoice(playerChoice, aiMove);
@@ -65,7 +61,6 @@ const Game = () => {
     }
   }, [playerChoice, aiChoice]);
   
-  // Handle innings and game state changes
   useEffect(() => {
     if (innings === 2 && target !== null && !showInningsEnd) {
       setShowInningsEnd(true);
@@ -77,7 +72,6 @@ const Game = () => {
   }, [innings, target, gameState, showInningsEnd, showGameOver]);
 
   const handleGestureDetected = (gesture: number) => {
-    // Submit user's choice (AI move will be calculated in the effect above)
     makeChoice(gesture);
   };
 
@@ -120,25 +114,19 @@ const Game = () => {
     });
   };
 
-  // Fix the transition to the next innings
   const handleContinueToNextInnings = () => {
-    console.log("Handle continue to next innings called");
+    console.log("Handle continue to next innings called in Game.tsx");
     
-    // Important: hide the innings end overlay first
     setShowInningsEnd(false);
-    
-    // Make sure hand detector is active for second innings
     setShowHandDetector(true);
     
-    // Minor delay to ensure UI updates before showing toast
     setTimeout(() => {
-      // Display toast to inform player about second innings start
       toast({
         title: `Second Innings Started!`,
         description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
         duration: 3000,
       });
-    }, 100);
+    }, 200);
   };
 
   const handleRestartGame = () => {
