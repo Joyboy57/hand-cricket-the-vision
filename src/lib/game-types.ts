@@ -22,6 +22,8 @@ export interface GameContextType {
   chooseToss: (choice: 'heads' | 'tails') => void;
   chooseBatOrBowl: (choice: 'bat' | 'bowl') => void;
   refreshCamera: () => void;
+  declareInnings: () => void;
+  setInnings: (innings: number) => void;
 }
 
 // Initial state interface

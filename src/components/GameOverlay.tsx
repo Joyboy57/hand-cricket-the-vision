@@ -57,7 +57,7 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
         </div>
       )}
       
-      {/* Game results overlay */}
+      {/* Game results overlay - only show ONE of these at a time */}
       {(showInningsEnd || showGameOver) && (
         <div className="absolute inset-0 z-50 flex items-center justify-center">
           <GameResults 

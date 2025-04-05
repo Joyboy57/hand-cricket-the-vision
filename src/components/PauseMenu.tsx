@@ -1,17 +1,24 @@
 
 import React from 'react';
-import { 
-  Drawer, 
-  DrawerContent, 
-  DrawerHeader, 
-  DrawerTitle, 
-  DrawerDescription, 
-  DrawerFooter,
-  DrawerClose
-} from '@/components/ui/drawer';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Separator } from "@/components/ui/separator";
-import { X, Volume2, VolumeX, RotateCw } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import {
+  RotateCcw,
+  Home,
+  Volume2,
+  VolumeX,
+  Play,
+  Flag
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface PauseMenuProps {
   open: boolean;
@@ -20,6 +27,7 @@ interface PauseMenuProps {
   onResume: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
+  onDeclareInnings?: () => void;
 }
 
 const PauseMenu: React.FC<PauseMenuProps> = ({
@@ -28,89 +36,69 @@ const PauseMenu: React.FC<PauseMenuProps> = ({
   onRestart,
   onResume,
   soundEnabled,
-  onToggleSound
+  onToggleSound,
+  onDeclareInnings
 }) => {
+  const navigate = useNavigate();
+
+  const handleHomeClick = () => {
+    navigate('/');
+  };
+
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-w-md mx-auto">
-        <div className="mx-auto w-full max-w-sm">
-          <DrawerHeader>
-            <DrawerTitle className="text-center text-2xl">Game Paused</DrawerTitle>
-            <DrawerDescription className="text-center">
-              Take a break or adjust your settings
-            </DrawerDescription>
-          </DrawerHeader>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Game Paused</SheetTitle>
+          <SheetDescription>
+            Take a break, adjust settings, or restart the game.
+          </SheetDescription>
+        </SheetHeader>
+        <div className="py-4 flex flex-col space-y-4">
+          <Button onClick={onResume} className="w-full flex items-center justify-center gap-2">
+            <Play className="h-4 w-4" />
+            Resume Game
+          </Button>
           
-          <div className="p-4 space-y-6">
-            <div className="space-y-2">
-              <h3 className="text-lg font-medium">Game Controls</h3>
-              <Separator />
-              <Button 
-                variant="outline" 
-                className="w-full justify-start" 
-                onClick={onResume}
-              >
-                Resume Game
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full justify-start" 
-                onClick={onRestart}
-              >
-                <RotateCw className="mr-2 h-4 w-4" />
-                Restart Game
-              </Button>
+          <Button onClick={onRestart} variant="outline" className="w-full flex items-center justify-center gap-2">
+            <RotateCcw className="h-4 w-4" />
+            Restart Game
+          </Button>
+          
+          <Button onClick={handleHomeClick} variant="outline" className="w-full flex items-center justify-center gap-2">
+            <Home className="h-4 w-4" />
+            Return to Home
+          </Button>
+          
+          {onDeclareInnings && (
+            <Button 
+              onClick={onDeclareInnings} 
+              variant="destructive" 
+              className="w-full flex items-center justify-center gap-2"
+            >
+              <Flag className="h-4 w-4" />
+              Declare Innings
+            </Button>
+          )}
+          
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Label htmlFor="sound-toggle" className="cursor-pointer">Sound</Label>
+              {soundEnabled ? (
+                <Volume2 className="h-4 w-4 text-primary" />
+              ) : (
+                <VolumeX className="h-4 w-4 text-muted-foreground" />
+              )}
             </div>
-            
-            <div className="space-y-2">
-              <h3 className="text-lg font-medium">Settings</h3>
-              <Separator />
-              <Button 
-                variant="outline" 
-                className="w-full justify-start" 
-                onClick={onToggleSound}
-              >
-                {soundEnabled ? (
-                  <>
-                    <Volume2 className="mr-2 h-4 w-4" />
-                    Sound: On
-                  </>
-                ) : (
-                  <>
-                    <VolumeX className="mr-2 h-4 w-4" />
-                    Sound: Off
-                  </>
-                )}
-              </Button>
-            </div>
-            
-            <div className="space-y-2">
-              <h3 className="text-lg font-medium">Game Rules</h3>
-              <Separator />
-              <div className="p-3 bg-muted/50 rounded-md space-y-2 text-sm">
-                <p className="font-medium">How to Play:</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Show 1-4 fingers to score 1-4 runs</li>
-                  <li>Show open hand (all 5 fingers) to score 5 runs</li>
-                  <li>Show only thumb up to score 6 runs</li>
-                  <li>If your gesture matches the AI's, you're out!</li>
-                  <li>The player with the highest score at the end of both innings wins</li>
-                </ul>
-              </div>
-            </div>
+            <Switch
+              id="sound-toggle"
+              checked={soundEnabled}
+              onCheckedChange={onToggleSound}
+            />
           </div>
-          
-          <DrawerFooter>
-            <DrawerClose asChild>
-              <Button variant="outline">
-                <X className="mr-2 h-4 w-4" />
-                Close
-              </Button>
-            </DrawerClose>
-          </DrawerFooter>
         </div>
-      </DrawerContent>
-    </Drawer>
+      </SheetContent>
+    </Sheet>
   );
 };
 

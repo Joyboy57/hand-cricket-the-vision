@@ -40,10 +40,9 @@ const GameResults: React.FC<GameResultsProps> = ({
     navigate('/');
   };
 
-  // Simplified handler for Continue button with no event prevention
+  // Directly call the parent handler with no additional logic
   const handleContinueClick = () => {
-    console.log("Continue button clicked in GameResults - calling parent handler");
-    
+    console.log("Continue button clicked in GameResults");
     if (isGameOver) {
       onRestartGame();
     } else {
@@ -148,6 +147,7 @@ const GameResults: React.FC<GameResultsProps> = ({
           label={isGameOver ? "Play Again" : "Continue to Next Innings"}
           onClick={handleContinueClick}
           className="w-full"
+          data-testid="continue-button"
         />
         
         {isGameOver && (

@@ -74,6 +74,23 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     statistics
   });
 
+  // Handle declaration of innings
+  const declareInnings = useCallback(() => {
+    if (innings === 1 && userBatting) {
+      // Set target for AI (current score + 1)
+      setTarget(playerScore + 1);
+      
+      // Switch to bowling (player now bowls to AI)
+      setUserBatting(false);
+      
+      // Reset choices and switch to second innings
+      setInnings(2);
+      resetChoices();
+      setBallsPlayed(0);
+      setGameState('bowling');
+    }
+  }, [innings, playerScore, userBatting]);
+
   // Load statistics on initial load
   useEffect(() => {
     const savedStats = loadStatistics();
@@ -148,7 +165,9 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         makeChoice,
         chooseToss,
         chooseBatOrBowl,
-        refreshCamera
+        refreshCamera,
+        declareInnings,
+        setInnings
       }}
     >
       {children}

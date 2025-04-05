@@ -12,14 +12,16 @@ export class MediaPipeService {
   private calibrationData: { handSize: number; thumbIndexDist: number } | null = null;
   private lastGestureDetected: number = 0;
   private gestureConfidence: { [key: number]: number } = {};
-  private readonly gestureThreshold: number = 2; // Lower threshold for more responsive detection
+  private readonly gestureThreshold: number = 3; // Increased threshold for more stable detection
   private lastFrameProcessed: number = 0;
-  private processingFrameRate: number = 20; // Higher frame rate for better responsiveness
+  private processingFrameRate: number = 15; // Adjusted for better balance of performance/accuracy
   private lastLandmarkTime: number = 0;
   private isCameraRunningFlag: boolean = false;
   private fingersUp: boolean[] = [false, false, false, false, false];
   private gestureDebugInfo: string = '';
   private cameraStartedSuccessfully: boolean = false;
+  private fingersExtendedHistory: boolean[][] = [];
+  private historyMaxLength: number = 5; // Track last 5 frames for stability
 
   constructor() {
     // The actual Hands and Camera initialization will happen when initialize() is called
@@ -51,7 +53,7 @@ export class MediaPipeService {
     this.hands.setOptions({
       maxNumHands: 1,
       modelComplexity: 1, // Use medium complexity for better detection
-      minDetectionConfidence: 0.5, // Lower threshold for more reliable detection
+      minDetectionConfidence: 0.6, // Increased for more stable detection
       minTrackingConfidence: 0.5
     });
 
@@ -129,6 +131,7 @@ export class MediaPipeService {
     // Reset all gesture confidence levels
     this.gestureConfidence = {};
     this.lastGestureDetected = 0;
+    this.fingersExtendedHistory = [];
     console.log("Calibration started");
     
     // After 5 seconds, end calibration
@@ -191,10 +194,17 @@ export class MediaPipeService {
         } 
         // Only detect gestures if not calibrating
         else if (this.gestureCallback) {
-          // First detect which fingers are up
-          this.fingersUp = this.detectFingersUp(landmarks);
-
-          // Now detect the gesture based on finger positions
+          // First detect which fingers are extended
+          const currentFingersUp = this.detectFingersUp(landmarks);
+          this.fingersUp = currentFingersUp;
+          
+          // Add to history for stability
+          this.fingersExtendedHistory.push(currentFingersUp);
+          if (this.fingersExtendedHistory.length > this.historyMaxLength) {
+            this.fingersExtendedHistory.shift();
+          }
+          
+          // Now detect the gesture based on finger positions with history-based stability
           const gesture = this.detectImprovedGesture(landmarks);
           
           // Only trigger callback if we're confident about the gesture
@@ -292,60 +302,121 @@ export class MediaPipeService {
 
     // Define indices for the tips and pips of each finger
     const tipIds = [4, 8, 12, 16, 20]; // Thumb, index, middle, ring, pinky tips
+    const pipIds = [2, 6, 10, 14, 18]; // Second joints
+    const mcpIds = [1, 5, 9, 13, 17]; // Knuckles
+    
     const fingers = [];
+    const wrist = landmarks[0];
     
     // Special case for thumb due to its different orientation
     const thumbIp = landmarks[3];  // IP joint
     const thumbTip = landmarks[4]; // Tip
-    const thumbCmc = landmarks[1]; // CMC joint
-    const wrist = landmarks[0];    // Wrist
+    const thumbMcp = landmarks[2]; // MCP joint
     
-    // Calculate thumb extension using the 3D coordinates
-    // Thumb is up if the tip's y is less than the IP joint's y
-    // And the tip is far enough from the wrist in x coordinate
-    const thumbExtended = thumbTip.y < thumbIp.y && 
-                          Math.abs(thumbTip.x - wrist.x) > Math.abs(thumbCmc.x - wrist.x);
+    // Calculate thumb extension using the 3D coordinates and angle
+    // For thumb, check if tip is to the left/right of IP joint based on wrist position
+    const isRightHand = landmarks[17].x < landmarks[5].x; // Check if pinky is left of index knuckle
+    
+    // For thumb, check if it's extended away from palm
+    let thumbExtended = false;
+    
+    if (isRightHand) {
+      // Right hand - thumb is extended if tip is to the left of the IP joint
+      thumbExtended = thumbTip.x < thumbIp.x;
+    } else {
+      // Left hand - thumb is extended if tip is to the right of the IP joint
+      thumbExtended = thumbTip.x > thumbIp.x;
+    }
+    
+    // Also check vertical position - thumb should be higher than base
+    thumbExtended = thumbExtended && (thumbTip.y < thumbMcp.y);
     
     fingers.push(thumbExtended);
     
-    // For the four fingers
+    // For the four fingers - enhanced detection
     for (let i = 1; i < 5; i++) {
       const tipId = tipIds[i];
-      const pipId = tipId - 2; // PIP joint is 2 indices back from tip
+      const pipId = pipIds[i];
+      const mcpId = mcpIds[i];
       
-      // Check if fingertip is higher than pip joint (y gets smaller as we go up)
-      // And also check if the finger is bent by looking at z coords
-      const fingerExtended = landmarks[tipId].y < landmarks[pipId].y;
+      // A finger is considered extended if:
+      // 1. The tip is higher (lower y value) than the PIP joint
+      // 2. The tip is higher than the MCP (knuckle)
+      // 3. The tip is significantly in front of the PIP (z-axis extension)
       
+      const tipAbovePip = landmarks[tipId].y < landmarks[pipId].y;
+      const tipAboveMcp = landmarks[tipId].y < landmarks[mcpId].y;
+      const tipInFrontOfPip = landmarks[tipId].z < landmarks[pipId].z - 0.05; // Z values are negative as they go towards the camera
+      
+      const fingerExtended = tipAbovePip && tipAboveMcp;
       fingers.push(fingerExtended);
     }
     
     return fingers;
   }
 
-  // Improved gesture detection
+  // Enhanced gesture detection with better discrimination between 4 and 5
   private detectImprovedGesture(landmarks: any[]): number {
     if (!landmarks || landmarks.length < 21) return 0;
     
-    // First get which fingers are extended
-    const fingers = this.fingersUp;
+    // Use history to determine the most stable reading of finger positions
+    // Calculate how many frames in history show each finger as extended
+    const fingerConsistency = [0, 0, 0, 0, 0];
+    
+    for (const frameFingers of this.fingersExtendedHistory) {
+      for (let i = 0; i < 5; i++) {
+        if (frameFingers[i]) {
+          fingerConsistency[i]++;
+        }
+      }
+    }
+    
+    // A finger is considered consistently extended if it's extended in the majority of frames
+    const consistentlyExtended = fingerConsistency.map(count => 
+      count >= Math.ceil(this.fingersExtendedHistory.length / 2)
+    );
     
     // For thumbs up (gesture 6) - only thumb is extended
-    if (fingers[0] && !fingers[1] && !fingers[2] && !fingers[3] && !fingers[4]) {
+    if (consistentlyExtended[0] && !consistentlyExtended[1] && !consistentlyExtended[2] && 
+        !consistentlyExtended[3] && !consistentlyExtended[4]) {
       return 6;
     }
     
-    // For open hand (gesture 5) - all fingers extended
-    if (fingers[0] && fingers[1] && fingers[2] && fingers[3] && fingers[4]) {
-      return 5;
+    // For improved detection between 4 and 5
+    const allFingers = consistentlyExtended.slice(1).filter(f => f).length;
+    
+    // For Open hand (gesture 5) - all regular fingers must be extended AND
+    // we need to check thumb position relative to palm to distinguish from 4
+    if (allFingers === 4) {
+      // For gesture 5, thumb should also be clearly extended/visible
+      // Check if thumb is clearly out to the side of the hand
+      const thumbTip = landmarks[4]; 
+      const indexBase = landmarks[5]; // Index finger base
+      const pinkyBase = landmarks[17]; // Pinky base
+      
+      // Get the hand orientation (left/right)
+      const isRightHand = pinkyBase.x < indexBase.x;
+      
+      // Check if thumb is clearly separated from palm
+      let thumbClearlyVisible = false;
+      
+      if (isRightHand) {
+        // For right hand, thumb should be clearly to the left of index base
+        thumbClearlyVisible = thumbTip.x < indexBase.x - 0.05;
+      } else {
+        // For left hand, thumb should be clearly to the right of index base
+        thumbClearlyVisible = thumbTip.x > indexBase.x + 0.05;
+      }
+      
+      if (thumbClearlyVisible || consistentlyExtended[0]) {
+        return 5; // Open hand with thumb visible
+      }
+      return 4; // Four fingers up but thumb not clearly visible
     }
     
-    // Count extended fingers (excluding thumb for gestures 1-4)
-    const extendedFingers = fingers.slice(1).filter(f => f).length;
-    
-    // Make sure we're in valid range for the game
-    if (extendedFingers >= 1 && extendedFingers <= 4) {
-      return extendedFingers;
+    // Count extended fingers (excluding thumb) for gestures 1-3
+    if (allFingers >= 1 && allFingers <= 3) {
+      return allFingers;
     }
     
     // Default case - no recognized gesture

@@ -6,7 +6,7 @@ import { useGame } from '@/lib/game-context';
 import { Waves } from '@/components/ui/waves-background';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
-import { Pause } from 'lucide-react';
+import { Pause, Flag } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import PauseMenu from '@/components/PauseMenu';
 import GameHeader from '@/components/GameHeader';
@@ -37,6 +37,8 @@ const Game = () => {
     makeChoice,
     resetGame,
     chooseToss,
+    setInnings,
+    declareInnings
   } = useGame();
   
   const {
@@ -48,6 +50,7 @@ const Game = () => {
     aiThinking,
     showInningsEnd,
     showGameOver,
+    setCountdown,
     setShowHandDetector,
     setWonToss,
     setIsPaused,
@@ -129,17 +132,20 @@ const Game = () => {
   const handleContinueToNextInnings = () => {
     console.log("Handle continue to next innings called in Game.tsx");
     
-    // Important: Force this state update to happen immediately
+    // First hide the innings end screen
     setShowInningsEnd(false);
-    setShowHandDetector(true);
     
+    // Slight delay to ensure UI updates before showing hand detector
     setTimeout(() => {
+      // Then show hand detector for next innings
+      setShowHandDetector(true);
+      
       toast({
         title: `Second Innings Started!`,
         description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
         duration: 3000,
       });
-    }, 500);
+    }, 300);
   };
 
   const handleRestartGame = () => {
@@ -165,6 +171,25 @@ const Game = () => {
       duration: 1500,
     });
   };
+  
+  const handleDeclareInnings = () => {
+    if (innings === 1 && userBatting) {
+      declareInnings();
+      toast({
+        title: "Innings Declared!",
+        description: "You've declared your innings. Now defending your total.",
+        duration: 3000,
+      });
+      setShowInningsEnd(true);
+    } else {
+      toast({
+        title: "Cannot declare now",
+        description: "You can only declare when you're batting in the first innings",
+        variant: "destructive",
+        duration: 3000,
+      });
+    }
+  };
 
   return (
     <div className="relative min-h-screen w-full bg-background flex flex-col items-center justify-center p-4">
@@ -184,10 +209,22 @@ const Game = () => {
         onResume={handleResume}
         soundEnabled={soundEnabled}
         onToggleSound={handleToggleSound}
+        onDeclareInnings={handleDeclareInnings}
       />
       
       <div className="relative z-10 w-full max-w-4xl bg-background/60 backdrop-blur-sm rounded-xl p-6 shadow-xl">
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-4 right-4 flex gap-2">
+          {innings === 1 && userBatting && !showInningsEnd && !showGameOver && (
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={handleDeclareInnings}
+              className="bg-background/80 hover:bg-background"
+              title="Declare Innings"
+            >
+              <Flag className="h-4 w-4 text-primary" />
+            </Button>
+          )}
           <Button 
             variant="outline" 
             size="icon" 
