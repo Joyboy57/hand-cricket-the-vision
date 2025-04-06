@@ -46,9 +46,12 @@ export const useGameState = () => {
 
   // Explicitly complete the transition
   const completeInningsTransition = () => {
-    setShowInningsEnd(false);
     setInningsTransitionInProgress(false);
     setTransitionCompleted(true);
+    // Make sure to set showInningsEnd to false after a small delay to allow animations to complete
+    setTimeout(() => {
+      setShowInningsEnd(false);
+    }, 200);
   };
   
   const resetGameState = () => {

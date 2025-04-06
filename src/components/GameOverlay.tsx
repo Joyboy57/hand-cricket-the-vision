@@ -64,14 +64,16 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
       
       {/* Game transition overlays - only show ONE of these at a time */}
       {showInningsEnd && !showGameOver && !transitionCompleted && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center">
-          <InningsTransition
-            playerScore={playerScore}
-            aiScore={aiScore}
-            target={target}
-            onContinue={onContinueToNextInnings}
-            disabled={inningsTransitionInProgress}
-          />
+        <div className="absolute inset-0 z-50 flex items-center justify-center animate-fade-in">
+          <div className="w-full max-w-lg p-4">
+            <InningsTransition
+              playerScore={playerScore}
+              aiScore={aiScore}
+              target={target}
+              onContinue={onContinueToNextInnings}
+              disabled={inningsTransitionInProgress}
+            />
+          </div>
         </div>
       )}
       
