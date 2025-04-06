@@ -27,6 +27,7 @@ const GameCamera: React.FC<GameCameraProps> = ({
 }) => {
   const [calibrationComplete, setCalibrationComplete] = useState(false);
   const [handDetected, setHandDetected] = useState(false);
+  const [processingGesture, setProcessingGesture] = useState(false);
   const gestureProcessingRef = useRef(false);
   const { refreshCamera } = useGame();
   
@@ -75,6 +76,10 @@ const GameCamera: React.FC<GameCameraProps> = ({
       setHandDetected(false);
     }
   };
+  
+  const handleProcessingChange = (isProcessing: boolean) => {
+    setProcessingGesture(isProcessing);
+  };
 
   const handleRefreshCamera = () => {
     refreshCamera();
@@ -106,6 +111,7 @@ const GameCamera: React.FC<GameCameraProps> = ({
             disabled={disabled || isPaused || showInningsEnd || showGameOver || gestureProcessingRef.current}
             onCalibrationComplete={handleCalibrationComplete}
             onCameraStatusChange={handleCameraStatusChange}
+            onProcessingChange={handleProcessingChange}
           />
           
           {/* Camera refresh button */}

@@ -1,3 +1,4 @@
+
 // MediaPipe service for hand gesture recognition
 export class MediaPipeService {
   private hands: any;
@@ -5,13 +6,14 @@ export class MediaPipeService {
   private canvasCtx: CanvasRenderingContext2D | null = null;
   private videoElement: HTMLVideoElement | null = null;
   private canvasElement: HTMLCanvasElement | null = null;
-  private gestureCallback: ((gesture: number) => void) | null = null;
+  private gestureCallback: ((gesture: number, handedness: string, isMoving: boolean) => void) | null = null;
   private isCalibrating: boolean = true;
   private isReady: boolean = false;
   private calibrationData: { 
     handSize: number; 
     thumbIndexDist: number;
     fingerAngles: number[];
+    knucklePositions: {x: number, y: number}[];
   } | null = null;
   private lastGestureDetected: number = 0;
   private gestureConfidence: { [key: number]: number } = {};
@@ -25,15 +27,60 @@ export class MediaPipeService {
   private cameraStartedSuccessfully: boolean = false;
   private fingersExtendedHistory: boolean[][] = [];
   private historyMaxLength: number = 5;
+  private handednessValue: string = 'Unknown';
   
-  // New fields for enhanced detection
+  // Enhanced fields for improved detection
   private worker: Worker | null = null;
   private isHandMoving: boolean = false;
   private previousLandmarks: any[] = [];
-  private movementThreshold: number = 0.01;
-  private weightedBuffer: Array<{gesture: number, weight: number}> = [];
-  private calibrationSamples: Array<{angles: number[], distance: number}> = [];
+  private movementThreshold: number = 0.015;
+  private weightedBuffer: Array<{gesture: number, weight: number, timestamp: number}> = [];
+  private calibrationSamples: Array<{
+    angles: number[], 
+    distances: number[],
+    handSize: number,
+    knuckles: {x: number, y: number}[]
+  }> = [];
   private isProcessingFrame: boolean = false;
+
+  // Type definitions for enhanced gesture recognition
+  private readonly FINGER_NAMES = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+  
+  // Landmark indices for each finger
+  private readonly FINGER_LANDMARKS = {
+    thumb: [1, 2, 3, 4],
+    index: [5, 6, 7, 8],
+    middle: [9, 10, 11, 12],
+    ring: [13, 14, 15, 16],
+    pinky: [17, 18, 19, 20]
+  };
+  
+  // Indices of finger tips
+  private readonly FINGER_TIPS = {
+    thumb: 4,
+    index: 8,
+    middle: 12,
+    ring: 16,
+    pinky: 20
+  };
+  
+  // Indices of PIP joints (middle joints)
+  private readonly FINGER_PIPS = {
+    thumb: 2,
+    index: 6,
+    middle: 10,
+    ring: 14,
+    pinky: 18
+  };
+  
+  // Indices of MCP joints (knuckles)
+  private readonly FINGER_MCPS = {
+    thumb: 1,
+    index: 5,
+    middle: 9,
+    ring: 13,
+    pinky: 17
+  };
 
   constructor() {
     // The actual Hands and Camera initialization will happen when initialize() is called
@@ -52,66 +99,88 @@ export class MediaPipeService {
               const landmarks = data.landmarks;
               const angles = calculateFingerAngles(landmarks);
               const moving = detectMotion(landmarks, data.previous, data.threshold);
+              const handDistance = calculateHandMetrics(landmarks);
               
               self.postMessage({ 
                 task: 'angleResults', 
                 angles: angles,
+                metrics: handDistance,
                 moving: moving 
               });
             }
             
             if (task === 'processGesture') {
-              const { fingersExtended, calibration } = data;
-              const gesture = determineGesture(fingersExtended, calibration);
+              const { fingersExtended, calibration, handedness, landmarks } = data;
+              const gesture = determineGesture(fingersExtended, landmarks, calibration, handedness);
               self.postMessage({ task: 'gestureResult', gesture });
             }
           };
+          
+          // Get angle between three points
+          function getJointAngle(a, b, c) {
+            // Calculate vectors between points
+            const v1 = { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z };
+            const v2 = { x: c.x - b.x, y: c.y - b.y, z: c.z - b.z };
+            
+            // Calculate dot product
+            const dotProduct = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+            
+            // Calculate magnitudes
+            const magV1 = Math.sqrt(v1.x * v1.x + v1.y * v1.y + v1.z * v1.z);
+            const magV2 = Math.sqrt(v2.x * v2.x + v2.y * v2.y + v2.z * v2.z);
+            
+            // Calculate angle in degrees
+            let angle = Math.acos(dotProduct / (magV1 * magV2)) * (180 / Math.PI);
+            if (isNaN(angle)) angle = 0;
+            
+            return angle;
+          }
           
           function calculateFingerAngles(landmarks) {
             if (!landmarks || landmarks.length < 21) return [];
             
             const angles = [];
-            // Wrist is landmark[0]
+            // Index for each finger's key parts
+            const fingerBase = [1, 5, 9, 13, 17]; // MCP joints
+            const fingerMiddle = [2, 6, 10, 14, 18]; // PIP joints
+            const fingerTip = [4, 8, 12, 16, 20]; // Fingertips
+            
             // For each finger
             for (let finger = 0; finger < 5; finger++) {
-              const baseIndex = finger === 0 ? 1 : (finger * 4) + 1;  // Thumb has different structure
-              const midIndex = baseIndex + 1;
-              const tipIndex = baseIndex + 2;
+              // Get the angle at the PIP joint (middle joint)
+              const base = landmarks[fingerBase[finger]];
+              const middle = landmarks[fingerMiddle[finger]];
+              const tip = landmarks[fingerTip[finger]];
               
-              const base = landmarks[baseIndex];
-              const mid = landmarks[midIndex];
-              const tip = landmarks[tipIndex];
-              
-              // Calculate vectors
-              const v1 = {
-                x: mid.x - base.x,
-                y: mid.y - base.y,
-                z: mid.z - base.z
-              };
-              
-              const v2 = {
-                x: tip.x - mid.x,
-                y: tip.y - mid.y,
-                z: tip.z - mid.z
-              };
-              
-              // Calculate dot product
-              const dotProduct = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
-              
-              // Calculate magnitudes
-              const v1Mag = Math.sqrt(v1.x * v1.x + v1.y * v1.y + v1.z * v1.z);
-              const v2Mag = Math.sqrt(v2.x * v2.x + v2.y * v2.y + v2.z * v2.z);
-              
-              // Calculate angle in radians and convert to degrees
-              let angle = Math.acos(dotProduct / (v1Mag * v2Mag)) * (180 / Math.PI);
-              
-              // Handle NaN cases (when vectors are too small)
-              if (isNaN(angle)) angle = 0;
-              
+              const angle = getJointAngle(base, middle, tip);
               angles.push(angle);
             }
             
             return angles;
+          }
+          
+          function calculateHandMetrics(landmarks) {
+            if (!landmarks || landmarks.length < 21) return { handSize: 0, distances: [] };
+            
+            const wrist = landmarks[0];
+            const distances = [];
+            
+            // Calculate distance from wrist to each fingertip
+            const fingertips = [4, 8, 12, 16, 20];
+            for (const tip of fingertips) {
+              const tipPoint = landmarks[tip];
+              const distance = Math.hypot(
+                tipPoint.x - wrist.x,
+                tipPoint.y - wrist.y,
+                tipPoint.z - wrist.z
+              );
+              distances.push(distance);
+            }
+            
+            // Use middle finger length as hand size reference
+            const handSize = distances[2];
+            
+            return { handSize, distances };
           }
           
           function detectMotion(current, previous, threshold) {
@@ -131,33 +200,43 @@ export class MediaPipeService {
             return totalMovement > threshold;
           }
           
-          function determineGesture(fingersExtended, calibration) {
+          function isFingerExtended(fingerAngles, fingerIndex, handedness) {
+            // Different angle thresholds for thumb vs. other fingers
+            const isThumb = fingerIndex === 0;
+            const angleThreshold = isThumb ? 150 : 160;
+            
+            return fingerAngles[fingerIndex] > angleThreshold;
+          }
+          
+          function determineGesture(fingersExtended, landmarks, calibration, handedness) {
             if (!fingersExtended || fingersExtended.length !== 5) return 0;
             
+            // Count how many fingers are extended, excluding thumb
             const thumbExtended = fingersExtended[0];
-            const nonThumbExtendedCount = fingersExtended.slice(1).filter(Boolean).length;
+            const nonThumbExtended = fingersExtended.slice(1);
+            const nonThumbCount = nonThumbExtended.filter(Boolean).length;
             
-            // Thumbs up (gesture 6)
-            if (thumbExtended && nonThumbExtendedCount === 0) {
-              return 6;
+            // Special case for thumb only (6)
+            if (thumbExtended && nonThumbCount === 0) {
+              return 6; // Thumbs up!
             }
             
-            // All 5 fingers (gesture 5)
-            if (nonThumbExtendedCount === 4 && thumbExtended) {
+            // Special case for all five fingers (5)
+            if (thumbExtended && nonThumbCount === 4) {
               return 5;
             }
             
-            // 4 fingers (gesture 4)
-            if (nonThumbExtendedCount === 4 && !thumbExtended) {
+            // Special case for all four fingers except thumb (4)
+            if (!thumbExtended && nonThumbCount === 4) {
               return 4;
             }
             
-            // 1-3 fingers
-            if (nonThumbExtendedCount >= 1 && nonThumbExtendedCount <= 3) {
-              return nonThumbExtendedCount;
+            // Cases for 1-3 fingers, only counting non-thumb fingers
+            if (nonThumbCount >= 1 && nonThumbCount <= 3) {
+              return nonThumbCount;
             }
             
-            return 0;
+            return 0; // Unknown gesture
           }
         `;
         
@@ -165,10 +244,10 @@ export class MediaPipeService {
         this.worker = new Worker(URL.createObjectURL(blob));
         
         this.worker.onmessage = (e) => {
-          const { task, angles, moving, gesture } = e.data;
+          const { task, angles, moving, gesture, metrics } = e.data;
           
           if (task === 'angleResults') {
-            this.handleAngleCalculationResult(angles, moving);
+            this.handleAngleCalculationResult(angles, moving, metrics);
           }
           
           if (task === 'gestureResult') {
@@ -187,22 +266,44 @@ export class MediaPipeService {
     }
   }
 
-  private handleAngleCalculationResult(angles: number[], isMoving: boolean) {
-    if (!this.isCalibrating) {
+  private handleAngleCalculationResult(angles: number[], isMoving: boolean, metrics: any) {
+    if (this.isCalibrating) {
+      // During calibration, store the angles and metrics
+      if (metrics && metrics.handSize > 0) {
+        this.collectCalibrationSample(angles, metrics);
+      }
+    } else {
+      // During normal operation
       this.isHandMoving = isMoving;
     }
   }
 
+  private collectCalibrationSample(angles: number[], metrics: any) {
+    if (!this.calibrationSamples) {
+      this.calibrationSamples = [];
+    }
+    
+    // Collect knuckle positions for reference
+    const knuckles: {x: number, y: number}[] = [];
+    
+    this.calibrationSamples.push({
+      angles,
+      distances: metrics.distances,
+      handSize: metrics.handSize,
+      knuckles
+    });
+  }
+
   private handleGestureResult(gesture: number) {
     if (gesture > 0 && !this.isCalibrating) {
-      this.processGestureWithConfidence(gesture);
+      this.processGestureWithWeightedConfidence(gesture);
     }
   }
 
   public async initialize(
     videoElement: HTMLVideoElement,
     canvasElement: HTMLCanvasElement,
-    onGestureDetected: (gesture: number) => void
+    onGestureDetected: (gesture: number, handedness: string, isMoving: boolean) => void
   ): Promise<boolean> {
     if (!window.Hands || !window.Camera) {
       console.error("MediaPipe libraries not loaded yet");
@@ -324,6 +425,7 @@ export class MediaPipeService {
 
     // Calculate average angles for reference
     const averageAngles = [0, 0, 0, 0, 0];
+    const knucklePositions: {x: number, y: number}[] = [];
     let thumbIndexDist = 0;
     let handSize = 0;
     
@@ -331,15 +433,16 @@ export class MediaPipeService {
       for (let i = 0; i < 5; i++) {
         averageAngles[i] += sample.angles[i] / this.calibrationSamples.length;
       }
-      thumbIndexDist += sample.distance / this.calibrationSamples.length;
+      
+      // Average hand size
+      handSize += sample.handSize / this.calibrationSamples.length;
     }
-    
-    handSize = thumbIndexDist * 5; // Approximation based on thumb-index distance
     
     this.calibrationData = {
       handSize,
       thumbIndexDist: thumbIndexDist * 0.7, // 70% of calibration as threshold
       fingerAngles: averageAngles,
+      knucklePositions: knucklePositions
     };
     
     console.log("Calibration completed with data:", this.calibrationData);
@@ -379,6 +482,12 @@ export class MediaPipeService {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
       const landmarks = results.multiHandLandmarks[0];
       
+      // Get handedness (left or right hand)
+      const handedness = results.multiHandedness && results.multiHandedness[0] ? 
+                         results.multiHandedness[0].label : 'Unknown';
+      
+      this.handednessValue = handedness;
+                         
       // Draw connections with increased visibility
       window.drawConnectors(this.canvasCtx, landmarks, window.HAND_CONNECTIONS, 
         { color: '#22c55e', lineWidth: 3 });
@@ -418,7 +527,7 @@ export class MediaPipeService {
       // Only detect gestures if not calibrating
       else if (this.gestureCallback) {
         // First detect which fingers are extended using the vector-angle approach
-        const currentFingersUp = this.detectFingersUpWithVectors(landmarks);
+        const currentFingersUp = this.detectFingersExtendedWithAngles(landmarks, handedness);
         this.fingersUp = currentFingersUp;
         
         // Add to history for stability
@@ -433,13 +542,15 @@ export class MediaPipeService {
             task: 'processGesture',
             data: {
               fingersExtended: currentFingersUp,
-              calibration: this.calibrationData
+              landmarks: landmarks,
+              calibration: this.calibrationData,
+              handedness: handedness
             }
           });
         } else {
           // Fallback to direct processing
-          const gesture = this.detectImprovedGesture(landmarks);
-          this.processGestureWithConfidence(gesture);
+          const gesture = this.detectImprovedGesture(landmarks, handedness);
+          this.processGestureWithWeightedConfidence(gesture);
         }
       }
       
@@ -497,14 +608,23 @@ export class MediaPipeService {
     // Store sample with rich data
     this.calibrationSamples.push({
       angles,
-      distance: thumbIndexDist
+      distances: [thumbIndexDist],
+      handSize,
+      knuckles: this.FINGER_NAMES.map(name => {
+        const mcpIndex = this.FINGER_MCPS[name as keyof typeof this.FINGER_MCPS];
+        return { 
+          x: landmarks[mcpIndex].x, 
+          y: landmarks[mcpIndex].y 
+        };
+      })
     });
     
     // Update calibration data
     this.calibrationData = {
       handSize,
       thumbIndexDist: thumbIndexDist * 0.7, // 70% of max separation as threshold
-      fingerAngles: angles
+      fingerAngles: angles,
+      knucklePositions: this.calibrationSamples[0].knuckles
     };
   }
 
@@ -516,25 +636,25 @@ export class MediaPipeService {
     
     // For each finger
     for (let finger = 0; finger < 5; finger++) {
-      const baseIndex = finger === 0 ? 1 : (finger * 4) + 1;  // Thumb has different structure
-      const midIndex = baseIndex + 1;
-      const tipIndex = baseIndex + 2;
+      const fingerName = this.FINGER_NAMES[finger] as keyof typeof this.FINGER_LANDMARKS;
+      const fingerPoints = this.FINGER_LANDMARKS[fingerName];
       
-      const base = landmarks[baseIndex];
-      const mid = landmarks[midIndex];
-      const tip = landmarks[tipIndex];
+      // Get the MCP, PIP, and tip landmarks
+      const mcp = landmarks[fingerPoints[0]];
+      const pip = landmarks[fingerPoints[1]];
+      const tip = landmarks[fingerPoints[3]];
       
       // Calculate vectors
       const v1 = {
-        x: mid.x - base.x,
-        y: mid.y - base.y,
-        z: mid.z - base.z
+        x: mcp.x - pip.x,
+        y: mcp.y - pip.y,
+        z: mcp.z - pip.z
       };
       
       const v2 = {
-        x: tip.x - mid.x,
-        y: tip.y - mid.y,
-        z: tip.z - mid.z
+        x: tip.x - pip.x,
+        y: tip.y - pip.y,
+        z: tip.z - pip.z
       };
       
       // Calculate dot product
@@ -557,50 +677,47 @@ export class MediaPipeService {
   }
 
   // Enhanced finger detection using vector angles
-  private detectFingersUpWithVectors(landmarks: any[]): boolean[] {
+  private detectFingersExtendedWithAngles(landmarks: any[], handedness: string): boolean[] {
     if (!landmarks || landmarks.length < 21) return [false, false, false, false, false];
 
-    const tipIds = [4, 8, 12, 16, 20]; // Thumb, index, middle, ring, pinky tips
-    const mcpIds = [1, 5, 9, 13, 17]; // Knuckles
-    const pipIds = [2, 6, 10, 14, 18]; // PIP joints
-    
     const wrist = landmarks[0];
     const fingers = [];
 
     // Get the angles we calculated
     const angles = this.calculateFingerAngles(landmarks);
     
-    // For each finger, determine if it's extended based on angle thresholds
+    // For each finger, determine if it's extended based on angle thresholds and vertical position
     for (let i = 0; i < 5; i++) {
+      const fingerName = this.FINGER_NAMES[i] as keyof typeof this.FINGER_TIPS;
+      const tipIndex = this.FINGER_TIPS[fingerName];
+      const mcpIndex = this.FINGER_MCPS[fingerName];
+      const pipIndex = this.FINGER_PIPS[fingerName];
+      
       const angle = angles[i];
+      const tip = landmarks[tipIndex];
+      const mcp = landmarks[mcpIndex];
+      const pip = landmarks[pipIndex];
       
       // A smaller angle indicates a straighter finger (more extended)
       // For thumb (i=0), we need special handling
-      if (i === 0) {
-        // For thumb, check horizontal position relative to hand orientation
-        const thumbTip = landmarks[tipIds[0]];
-        const thumbIp = landmarks[pipIds[0]];
-        const isRightHand = landmarks[17].x < landmarks[5].x; // Check pinky vs index position
+      if (i === 0) { 
+        // For thumb, check position relative to hand orientation
+        const isRightHand = handedness === 'Right';
         
         let thumbExtended = false;
         if (isRightHand) {
-          thumbExtended = thumbTip.x < thumbIp.x;
+          thumbExtended = tip.x < pip.x;
         } else {
-          thumbExtended = thumbTip.x > thumbIp.x;
+          thumbExtended = tip.x > pip.x;
         }
         
-        // Combine with angle check - more extended thumb has smaller angle
-        thumbExtended = thumbExtended && (angle < 40);
+        // Also check angle - more extended thumb has larger angle
+        thumbExtended = thumbExtended && (angle > 150);
         fingers.push(thumbExtended);
       } else {
         // For other fingers, use both angle and position
-        const tipY = landmarks[tipIds[i]].y;
-        const mcpY = landmarks[mcpIds[i]].y;
-        
-        // A finger is extended if:
-        // 1. Angle is relatively straight (< 60 degrees)
-        // 2. The tip is higher (smaller Y) than the base
-        const isExtended = angle < 60 && tipY < mcpY;
+        // An extended finger is straighter (larger angle) and tip is above MCP
+        const isExtended = angle > 160 && tip.y < mcp.y;
         fingers.push(isExtended);
       }
     }
@@ -608,36 +725,40 @@ export class MediaPipeService {
     return fingers;
   }
 
-  // Improved confidence-based gesture detection with weighted history
-  private processGestureWithConfidence(gesture: number): void {
-    // Skip processing if no movement is detected (reduces false positives)
-    if (!this.isHandMoving && this.previousLandmarks.length > 0) {
-      // Allow initial detection even without motion
-      if (this.gestureConfidence[gesture] && this.gestureConfidence[gesture] > 0) {
-        this.gestureDebugInfo = `Hand still, waiting for movement`;
-        return;
-      }
+  // Improved weighted confidence-based gesture detection
+  private processGestureWithWeightedConfidence(gesture: number): void {
+    const now = Date.now();
+    
+    // Skip processing if no movement is detected and we're not seeing a new gesture
+    if (!this.isHandMoving && this.previousLandmarks.length > 0 && 
+        this.lastGestureDetected === gesture && gesture > 0) {
+      return;
     }
     
     // Add to weighted buffer with time decay
-    const now = Date.now();
     const weight = 1.0; // Base weight for current detection
     
-    // Add new gesture with weight
-    this.weightedBuffer.push({ gesture, weight });
+    // Add new gesture with weight and timestamp
+    this.weightedBuffer.push({ gesture, weight, timestamp: now });
     
-    // Limit buffer size
-    if (this.weightedBuffer.length > 10) {
-      this.weightedBuffer.shift();
-    }
+    // Limit buffer size and remove old entries (older than 1 second)
+    this.weightedBuffer = this.weightedBuffer
+      .filter(entry => now - entry.timestamp < 1000)
+      .slice(-10); // Keep at most the last 10 entries
     
     // Calculate weighted scores for each gesture
     const scores: {[key: number]: number} = {};
     let totalWeight = 0;
     
+    // Newer gestures get higher weights
     for (const entry of this.weightedBuffer) {
-      scores[entry.gesture] = (scores[entry.gesture] || 0) + entry.weight;
-      totalWeight += entry.weight;
+      // Age-based decay - newer entries have higher weight
+      const age = (now - entry.timestamp) / 1000; // Age in seconds
+      const timeDecay = Math.max(0, 1 - (age * 0.5)); // Decay by 50% per second
+      const finalWeight = entry.weight * timeDecay;
+      
+      scores[entry.gesture] = (scores[entry.gesture] || 0) + finalWeight;
+      totalWeight += finalWeight;
     }
     
     // Find the dominant gesture
@@ -646,7 +767,7 @@ export class MediaPipeService {
     
     for (const [gesture, score] of Object.entries(scores)) {
       const normalizedScore = score / totalWeight;
-      if (normalizedScore > highestScore) {
+      if (normalizedScore > highestScore && normalizedScore > 0.6) { // 60% confidence threshold
         highestScore = normalizedScore;
         dominantGesture = parseInt(gesture);
       }
@@ -659,10 +780,12 @@ export class MediaPipeService {
       }
     }
     
-    this.gestureConfidence[dominantGesture] = (this.gestureConfidence[dominantGesture] || 0) + 1;
+    if (dominantGesture > 0) {
+      this.gestureConfidence[dominantGesture] = (this.gestureConfidence[dominantGesture] || 0) + 1;
+    }
     
     // Update debug info
-    this.gestureDebugInfo = `Gesture ${dominantGesture}: Conf ${this.gestureConfidence[dominantGesture]}/${this.gestureThreshold}, Score ${highestScore.toFixed(2)}`;
+    this.gestureDebugInfo = `G:${dominantGesture} C:${this.gestureConfidence[dominantGesture] || 0}/${this.gestureThreshold} S:${highestScore.toFixed(2)}`;
     
     // If we've reached the threshold, trigger the callback
     if (this.gestureConfidence[dominantGesture] >= this.gestureThreshold && 
@@ -672,7 +795,7 @@ export class MediaPipeService {
       this.lastGestureDetected = dominantGesture;
       
       if (this.gestureCallback) {
-        this.gestureCallback(dominantGesture);
+        this.gestureCallback(dominantGesture, this.handednessValue, this.isHandMoving);
       }
       
       // Reset confidence after triggering
@@ -684,14 +807,14 @@ export class MediaPipeService {
     }
   }
 
-  // FIXED: Completely rewritten gesture detection with clear distinction between 4 and 5
-  private detectImprovedGesture(landmarks: any[]): number {
+  // FIXED: Completely rewritten gesture detection with clear distinction between scores
+  private detectImprovedGesture(landmarks: any[], handedness: string): number {
     if (!landmarks || landmarks.length < 21) return 0;
     
     // Use history to determine the most stable reading of finger positions
-    // Calculate how many frames in history show each finger as extended
     const fingerConsistency = [0, 0, 0, 0, 0];
     
+    // Calculate how many frames in history show each finger as extended
     for (const frameFingers of this.fingersExtendedHistory) {
       for (let i = 0; i < 5; i++) {
         if (frameFingers[i]) {
@@ -700,40 +823,35 @@ export class MediaPipeService {
       }
     }
     
-    // A finger is considered consistently extended if it's extended in the majority of frames
-    const consistentlyExtended = fingerConsistency.map(count => 
-      count >= Math.ceil(this.fingersExtendedHistory.length / 2)
-    );
+    // A finger is considered consistently extended if it's extended in most frames
+    const historyThreshold = Math.ceil(this.fingersExtendedHistory.length * 0.6); // 60% of frames
+    const consistentlyExtended = fingerConsistency.map(count => count >= historyThreshold);
     
-    // For thumbs up (gesture 6) - only thumb is extended
+    // Score 6: Only thumb is extended (Thumbs up)
     if (consistentlyExtended[0] && !consistentlyExtended[1] && !consistentlyExtended[2] && 
         !consistentlyExtended[3] && !consistentlyExtended[4]) {
-      return 6; // Thumbs up
+      return 6;
     }
     
-    // FIXED: Clear distinction between gestures 4 and 5
-    // Count of extended fingers (excluding thumb)
+    // Count non-thumb extended fingers (index through pinky)
     const nonThumbExtendedCount = consistentlyExtended.slice(1).filter(Boolean).length;
     
-    // For gesture 5 (all 5 fingers) - must have thumb AND all four fingers extended
+    // Score 5: All five fingers extended (including thumb)
     if (nonThumbExtendedCount === 4 && consistentlyExtended[0]) {
-      this.gestureDebugInfo = "Detected Score 5: All five fingers extended including thumb";
       return 5;
     }
     
-    // For gesture 4 - all four non-thumb fingers extended, but NOT thumb
+    // Score 4: All four non-thumb fingers extended, thumb not extended
     if (nonThumbExtendedCount === 4 && !consistentlyExtended[0]) {
-      this.gestureDebugInfo = "Detected Score 4: All four regular fingers extended, thumb closed";
       return 4;
     }
     
-    // For gestures 1-3 - count the non-thumb fingers
+    // Score 1-3: Count of non-thumb fingers extended
     if (nonThumbExtendedCount >= 1 && nonThumbExtendedCount <= 3) {
       return nonThumbExtendedCount;
     }
     
-    // Default case - no recognized gesture
-    return 0;
+    return 0; // No recognized gesture
   }
 }
 

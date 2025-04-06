@@ -41,10 +41,14 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   const gestureConfidenceRef = useRef<{[key: number]: number}>({});
   const [debugInfo, setDebugInfo] = useState<string>('');
   const [motionDetected, setMotionDetected] = useState<boolean>(false);
+  const [handedness, setHandedness] = useState<string>('Unknown');
 
   // Enhanced gesture detection with improved confidence system
-  const throttledGestureDetection = (gesture: number) => {
+  const throttledGestureDetection = (gesture: number, handednessValue: string, motionDetected: boolean) => {
     if (disabled) return;
+    
+    setHandedness(handednessValue);
+    setMotionDetected(motionDetected);
     
     const now = Date.now();
     
@@ -71,7 +75,11 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
       
       console.log(`Gesture ${gesture} confidence: ${gestureConfidenceRef.current[gesture]}/3`);
       
-      if (gestureConfidenceRef.current[gesture] >= 2 && currentGestureRef.current !== gesture) {
+      // Only proceed with high confidence (3+ detections) and if motion is detected
+      if (gestureConfidenceRef.current[gesture] >= 3 && 
+          currentGestureRef.current !== gesture && 
+          (motionDetected || gesture !== lastDetectedGestureRef.current)) {
+          
         lastDetectedGestureRef.current = gesture;
         currentGestureRef.current = gesture;
         
@@ -302,10 +310,11 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
           </Button>
         </div>
         
-        {/* Debug info overlay */}
+        {/* Enhanced debug info overlay */}
         {debugInfo && (
           <div className="absolute bottom-4 left-4 bg-black/50 px-3 py-1 rounded text-xs text-white">
             {debugInfo}
+            <div>Hand: {handedness} | Motion: {motionDetected ? 'Yes' : 'No'}</div>
           </div>
         )}
       </div>
