@@ -15,6 +15,7 @@ interface GameOverlayProps {
   target: number | null;
   onRestartGame: () => void;
   onContinueToNextInnings: () => void;
+  inningsTransitionInProgress: boolean;
 }
 
 const GameOverlay: React.FC<GameOverlayProps> = ({
@@ -26,7 +27,8 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
   aiScore,
   target,
   onRestartGame,
-  onContinueToNextInnings
+  onContinueToNextInnings,
+  inningsTransitionInProgress
 }) => {
   return (
     <>
@@ -66,6 +68,7 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
             aiScore={aiScore}
             target={target}
             onContinue={onContinueToNextInnings}
+            disabled={inningsTransitionInProgress}
           />
         </div>
       )}

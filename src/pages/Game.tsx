@@ -59,6 +59,7 @@ const Game = () => {
     setShowInningsEnd,
     setShowGameOver,
     setInningsTransitionInProgress,
+    initiateInningsTransition,
     resetGameState
   } = useGameState();
   
@@ -135,19 +136,18 @@ const Game = () => {
   };
 
   const handleContinueToNextInnings = () => {
-    if (inningsTransitionInProgress) {
+    if (!initiateInningsTransition()) {
       console.log("Transition already in progress, ignoring click");
       return;
     }
     
     console.log("Continue to next innings clicked", {showInningsEnd, innings, userBatting});
     
-    setInningsTransitionInProgress(true);
-    
     setShowInningsEnd(false);
-    setShowHandDetector(true);
     
     setTimeout(() => {
+      setShowHandDetector(true);
+      
       toast({
         title: `Second Innings Started!`,
         description: `${userBatting ? 'Your turn to bat' : 'AI batting'}. Target: ${target}`,
@@ -162,6 +162,7 @@ const Game = () => {
     setShowInningsEnd(false);
     setShowGameOver(false);
     setShowHandDetector(false);
+    setInningsTransitionInProgress(false);
   };
 
   const handlePause = () => {
@@ -261,6 +262,7 @@ const Game = () => {
           target={target}
           onRestartGame={handleRestartGame}
           onContinueToNextInnings={handleContinueToNextInnings}
+          inningsTransitionInProgress={inningsTransitionInProgress}
         />
         
         <div className="flex flex-col md:flex-row gap-6">

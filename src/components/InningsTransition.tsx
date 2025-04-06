@@ -1,8 +1,7 @@
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { ButtonCta } from '@/components/ui/button-shiny';
 import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
-import { toast } from '@/hooks/use-toast';
 import { useGame } from '@/lib/game-context';
 
 interface InningsTransitionProps {
@@ -10,23 +9,27 @@ interface InningsTransitionProps {
   aiScore: number;
   target: number | null;
   onContinue: () => void;
+  disabled?: boolean;
 }
 
 const InningsTransition: React.FC<InningsTransitionProps> = ({
   playerScore,
   aiScore,
   target,
-  onContinue
+  onContinue,
+  disabled = false
 }) => {
   // Get user batting status from context
   const { userBatting, innings } = useGame();
 
   // Safely handle continue action with debounce
-  const handleContinueClick = () => {
+  const handleContinueClick = useCallback(() => {
+    if (disabled) return;
+    
     console.log("InningsTransition: Continue button clicked");
-    // Execute transition immediately and disable further clicks
+    // Execute transition immediately
     onContinue();
-  };
+  }, [onContinue, disabled]);
 
   return (
     <div className="w-full max-w-lg p-6 bg-card/95 backdrop-blur-sm rounded-xl shadow-xl">
@@ -76,6 +79,7 @@ const InningsTransition: React.FC<InningsTransitionProps> = ({
           onClick={handleContinueClick}
           className="w-full"
           data-testid="continue-innings-button"
+          disabled={disabled}
         />
       </div>
     </div>

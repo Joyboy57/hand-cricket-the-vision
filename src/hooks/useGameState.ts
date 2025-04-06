@@ -26,6 +26,15 @@ export const useGameState = () => {
     }
   }, [gameState, innings, showInningsEnd]);
   
+  // Track when a transition has been initiated to prevent multiple clicks
+  const initiateInningsTransition = () => {
+    if (!inningsTransitionInProgress) {
+      setInningsTransitionInProgress(true);
+      return true;
+    }
+    return false;
+  };
+  
   const resetGameState = () => {
     setCountdown(null);
     setShowHandDetector(false);
@@ -56,6 +65,7 @@ export const useGameState = () => {
     setShowInningsEnd,
     setShowGameOver,
     setInningsTransitionInProgress,
+    initiateInningsTransition,
     resetGameState
   };
 };
