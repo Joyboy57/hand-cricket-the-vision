@@ -1,11 +1,9 @@
-
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { GameContextType, GameStateType, GameState, PlayerStatistics } from '../game-types';
 import { handleGameActions } from './game-actions';
 import { INITIAL_STATISTICS, loadStatistics, saveStatistics } from './statistics';
 import { useGameControls } from './hooks/useGameControls';
 
-// Initial state for game context
 const initialState: GameState = {
   gameState: 'toss',
   playerScore: 0,
@@ -21,10 +19,8 @@ const initialState: GameState = {
   statistics: INITIAL_STATISTICS
 };
 
-// Create context
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
-// Provider component
 export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [gameState, setGameState] = useState<GameStateType>('toss');
   const [playerScore, setPlayerScore] = useState(0);
@@ -38,9 +34,8 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [tossResult, setTossResult] = useState<string | null>(null);
   const [ballsPlayed, setBallsPlayed] = useState(0);
   const [statistics, setStatistics] = useState<PlayerStatistics>(INITIAL_STATISTICS);
-  const [cameraKey, setCameraKey] = useState(0); // For camera refresh
-  
-  // Game controls hook
+  const [cameraKey, setCameraKey] = useState(0);
+
   const { 
     resetGame, 
     resetChoices, 
@@ -74,18 +69,14 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     statistics
   });
 
-  // Handle declaration of innings
   const declareInnings = useCallback(() => {
     if (innings === 1 && userBatting) {
       console.log("Declaring innings", {innings, playerScore});
       
-      // Set target for AI (current score + 1)
       setTarget(playerScore + 1);
       
-      // Switch to bowling (player now bowls to AI)
       setUserBatting(false);
       
-      // Reset choices and switch to second innings
       setInnings(2);
       resetChoices();
       setBallsPlayed(0);
@@ -93,7 +84,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [innings, playerScore, userBatting]);
 
-  // Load statistics on initial load
   useEffect(() => {
     const savedStats = loadStatistics();
     if (savedStats) {
@@ -101,7 +91,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  // Save statistics when game ends
   useEffect(() => {
     if (gameState === 'gameOver') {
       const updatedStats = {
@@ -112,12 +101,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         totalRuns: statistics.totalRuns + playerScore
       };
       
-      // Calculate strike rate
       if (ballsPlayed > 0) {
         updatedStats.strikeRate = Math.round((playerScore / ballsPlayed) * 100);
       }
       
-      // Check if this is a new best figure
       if (playerScore > statistics.bestFigures.runs) {
         updatedStats.bestFigures = {
           runs: playerScore,
@@ -130,12 +117,10 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [gameState]);
 
-  // Refresh camera by updating key
   const refreshCamera = useCallback(() => {
     setCameraKey(prev => prev + 1);
   }, []);
 
-  // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'r' || e.key === 'R') {
@@ -177,7 +162,6 @@ export const GameProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   );
 };
 
-// Custom hook to use game context
 export const useGame = () => {
   const context = useContext(GameContext);
   if (context === undefined) {

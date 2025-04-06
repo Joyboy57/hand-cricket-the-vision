@@ -50,6 +50,7 @@ const Game = () => {
     showInningsEnd,
     showGameOver,
     inningsTransitionInProgress,
+    transitionCompleted,
     setCountdown,
     setShowHandDetector,
     setWonToss,
@@ -59,7 +60,9 @@ const Game = () => {
     setShowInningsEnd,
     setShowGameOver,
     setInningsTransitionInProgress,
+    setTransitionCompleted,
     initiateInningsTransition,
+    completeInningsTransition,
     resetGameState
   } = useGameState();
   
@@ -80,7 +83,7 @@ const Game = () => {
   }, [playerChoice, aiChoice]);
   
   useEffect(() => {
-    if (innings === 2 && target !== null && !showInningsEnd && !showGameOver && gameState !== 'gameOver') {
+    if (innings === 2 && target !== null && !showInningsEnd && !showGameOver && gameState !== 'gameOver' && !transitionCompleted) {
       console.log("Setting showInningsEnd to true", {innings, target, showInningsEnd, showGameOver, gameState});
       setShowInningsEnd(true);
     }
@@ -90,7 +93,7 @@ const Game = () => {
       setShowGameOver(true);
       setShowInningsEnd(false);
     }
-  }, [innings, target, gameState, showInningsEnd, showGameOver]);
+  }, [innings, target, gameState, showInningsEnd, showGameOver, transitionCompleted]);
 
   const handleGestureDetected = (gesture: number) => {
     makeChoice(gesture);
@@ -143,7 +146,7 @@ const Game = () => {
     
     console.log("Continue to next innings clicked", {showInningsEnd, innings, userBatting});
     
-    setShowInningsEnd(false);
+    completeInningsTransition();
     
     setTimeout(() => {
       setShowHandDetector(true);
@@ -263,6 +266,7 @@ const Game = () => {
           onRestartGame={handleRestartGame}
           onContinueToNextInnings={handleContinueToNextInnings}
           inningsTransitionInProgress={inningsTransitionInProgress}
+          transitionCompleted={transitionCompleted}
         />
         
         <div className="flex flex-col md:flex-row gap-6">

@@ -22,14 +22,18 @@ const InningsTransition: React.FC<InningsTransitionProps> = ({
   // Get user batting status from context
   const { userBatting, innings } = useGame();
 
-  // Safely handle continue action with debounce
+  // Safely handle continue action
   const handleContinueClick = useCallback(() => {
     if (disabled) return;
     
     console.log("InningsTransition: Continue button clicked");
-    // Execute transition immediately
+    // Execute transition immediately and prevent further clicks
     onContinue();
   }, [onContinue, disabled]);
+
+  // Determine which side will be batting/bowling in the next innings
+  const nextInningsBattingSide = userBatting ? "AI" : "You";
+  const nextInningsBowlingSide = userBatting ? "You" : "AI";
 
   return (
     <div className="w-full max-w-lg p-6 bg-card/95 backdrop-blur-sm rounded-xl shadow-xl">
@@ -71,6 +75,15 @@ const InningsTransition: React.FC<InningsTransitionProps> = ({
           </div>
         </div>
       )}
+
+      {/* Next innings information */}
+      <div className="bg-background/80 p-4 rounded-lg text-center mb-6">
+        <h3 className="text-lg font-medium mb-2">Second Innings</h3>
+        <div className="text-sm">
+          <p><strong>{nextInningsBattingSide}</strong> will bat</p>
+          <p><strong>{nextInningsBowlingSide}</strong> will bowl</p>
+        </div>
+      </div>
       
       {/* Actions */}
       <div className="flex flex-col gap-3">

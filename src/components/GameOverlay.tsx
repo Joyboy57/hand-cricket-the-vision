@@ -16,6 +16,7 @@ interface GameOverlayProps {
   onRestartGame: () => void;
   onContinueToNextInnings: () => void;
   inningsTransitionInProgress: boolean;
+  transitionCompleted: boolean;
 }
 
 const GameOverlay: React.FC<GameOverlayProps> = ({
@@ -28,7 +29,8 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
   target,
   onRestartGame,
   onContinueToNextInnings,
-  inningsTransitionInProgress
+  inningsTransitionInProgress,
+  transitionCompleted
 }) => {
   return (
     <>
@@ -61,7 +63,7 @@ const GameOverlay: React.FC<GameOverlayProps> = ({
       )}
       
       {/* Game transition overlays - only show ONE of these at a time */}
-      {showInningsEnd && !showGameOver && (
+      {showInningsEnd && !showGameOver && !transitionCompleted && (
         <div className="absolute inset-0 z-50 flex items-center justify-center">
           <InningsTransition
             playerScore={playerScore}

@@ -38,12 +38,13 @@ export const handlePlayerOut = (
   setBallsPlayed: (balls: number) => void,
   resetChoices: () => void
 ): void => {
-  const { userBatting, playerScore, aiScore, target } = state;
+  const { userBatting, playerScore, aiScore, target, innings } = state;
   
   if (userBatting) {
     handleBattingPlayerOut(
       playerScore,
       target,
+      innings,
       setGameState,
       setTarget,
       setUserBatting,
@@ -56,6 +57,7 @@ export const handlePlayerOut = (
     handleBowlingPlayerOut(
       aiScore,
       target,
+      innings,
       setGameState,
       setTarget,
       setUserBatting,
@@ -71,6 +73,7 @@ export const handlePlayerOut = (
 const handleBattingPlayerOut = (
   playerScore: number,
   target: number | null,
+  currentInnings: number,
   setGameState: (state: GameStateType) => void,
   setTarget: (target: number | null) => void,
   setUserBatting: (batting: boolean) => void,
@@ -79,7 +82,8 @@ const handleBattingPlayerOut = (
   setBallsPlayed: (balls: number) => void,
   resetChoices: () => void
 ): void => {
-  if (target === null) {
+  // Only transition to second innings if we're still in the first innings
+  if (target === null && currentInnings === 1) {
     // First innings, set target for AI
     setTarget(playerScore + 1);
     setUserBatting(false);
@@ -104,6 +108,7 @@ const handleBattingPlayerOut = (
 const handleBowlingPlayerOut = (
   aiScore: number,
   target: number | null,
+  currentInnings: number,
   setGameState: (state: GameStateType) => void,
   setTarget: (target: number | null) => void,
   setUserBatting: (batting: boolean) => void,
@@ -112,7 +117,8 @@ const handleBowlingPlayerOut = (
   setBallsPlayed: (balls: number) => void,
   resetChoices: () => void
 ): void => {
-  if (target === null) {
+  // Only transition to second innings if we're still in the first innings
+  if (target === null && currentInnings === 1) {
     // First innings, set target for user
     setTarget(aiScore + 1);
     setUserBatting(true);

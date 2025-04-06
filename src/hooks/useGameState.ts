@@ -12,6 +12,7 @@ export const useGameState = () => {
   const [showInningsEnd, setShowInningsEnd] = useState(false);
   const [showGameOver, setShowGameOver] = useState(false);
   const [inningsTransitionInProgress, setInningsTransitionInProgress] = useState(false);
+  const [transitionCompleted, setTransitionCompleted] = useState(false);
   
   // Get game context to monitor state changes
   const { gameState, innings } = useGame();
@@ -23,8 +24,16 @@ export const useGameState = () => {
       console.log("Auto-hiding innings end screen because we're now in second innings", {gameState, innings});
       setShowInningsEnd(false);
       setInningsTransitionInProgress(false);
+      setTransitionCompleted(true);
     }
   }, [gameState, innings, showInningsEnd]);
+
+  // Effect to prevent showing innings end screen again after transition is completed
+  useEffect(() => {
+    if (transitionCompleted && innings === 2) {
+      setShowInningsEnd(false);
+    }
+  }, [innings, transitionCompleted]);
   
   // Track when a transition has been initiated to prevent multiple clicks
   const initiateInningsTransition = () => {
@@ -33,6 +42,13 @@ export const useGameState = () => {
       return true;
     }
     return false;
+  };
+
+  // Explicitly complete the transition
+  const completeInningsTransition = () => {
+    setShowInningsEnd(false);
+    setInningsTransitionInProgress(false);
+    setTransitionCompleted(true);
   };
   
   const resetGameState = () => {
@@ -44,6 +60,7 @@ export const useGameState = () => {
     setShowInningsEnd(false);
     setShowGameOver(false);
     setInningsTransitionInProgress(false);
+    setTransitionCompleted(false);
   };
   
   return {
@@ -56,6 +73,7 @@ export const useGameState = () => {
     showInningsEnd,
     showGameOver,
     inningsTransitionInProgress,
+    transitionCompleted,
     setCountdown,
     setShowHandDetector,
     setWonToss,
@@ -65,7 +83,9 @@ export const useGameState = () => {
     setShowInningsEnd,
     setShowGameOver,
     setInningsTransitionInProgress,
+    setTransitionCompleted,
     initiateInningsTransition,
+    completeInningsTransition,
     resetGameState
   };
 };

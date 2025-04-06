@@ -1,4 +1,3 @@
-
 import { GameStateType, GameState, PlayerStatistics } from '@/lib/game-types';
 import { handleGameActions } from '../game-actions';
 
@@ -124,6 +123,8 @@ export const useGameControls = ({
     setGameState(battingFirst ? 'batting' : 'bowling');
     setBallsPlayed(0);
     resetChoices();
+    
+    console.log(`Starting game with player ${battingFirst ? 'batting' : 'bowling'} first`);
   };
 
   // Handle toss choice
