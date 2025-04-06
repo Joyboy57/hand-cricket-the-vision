@@ -40,6 +40,7 @@ const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({
   const currentGestureRef = useRef<number>(0);
   const gestureConfidenceRef = useRef<{[key: number]: number}>({});
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const [motionDetected, setMotionDetected] = useState<boolean>(false);
 
   // Enhanced gesture detection with improved confidence system
   const throttledGestureDetection = (gesture: number) => {
