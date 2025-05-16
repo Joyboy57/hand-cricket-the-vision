@@ -19,7 +19,7 @@ const Auth = () => {
   const location = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const { login, register, isAuthenticated } = useAuth();
+  const { signIn, signUp, isAuthenticated } = useAuth();
   
   const [loginData, setLoginData] = useState({
     email: "",
@@ -63,7 +63,11 @@ const Auth = () => {
     setAuthError(null);
     
     try {
-      await login(loginData.email, loginData.password);
+      const result = await signIn(loginData.email, loginData.password);
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+      
       toast({
         title: "Logged in successfully",
         description: "Welcome back!",
@@ -97,7 +101,11 @@ const Auth = () => {
     }
     
     try {
-      await register(signupData.name, signupData.email, signupData.password);
+      const result = await signUp(signupData.email, signupData.password, signupData.name);
+      if (result.error) {
+        throw new Error(result.error.message);
+      }
+      
       toast({
         title: "Account created",
         description: "Your account has been created successfully!",
