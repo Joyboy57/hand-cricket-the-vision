@@ -10,6 +10,7 @@ import { ThemeProvider } from "next-themes";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import Auth from "./pages/Auth";
 import Game from "./pages/Game";
+import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <BrowserRouter>
               <Routes>
                 <Route path="/" element={<Auth />} />
+                <Route path="/home" element={<Index />} />
                 <Route path="/game" element={<Game />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>

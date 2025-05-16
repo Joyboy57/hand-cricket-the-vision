@@ -1,3 +1,6 @@
+
+// Update Game.tsx to use TextShimmerWave and improve mobile experience
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
@@ -16,6 +19,9 @@ import { useAiOpponent } from '@/hooks/useAiOpponent';
 import GameCamera from '@/components/GameCamera';
 import GameOverlay from '@/components/GameOverlay';
 import { useGameState } from '@/hooks/useGameState';
+import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
+import { supabase } from '@/integrations/supabase/client';
+import { useGameTour } from '@/hooks/useGameTour';
 
 const Game = () => {
   const { user } = useAuth();
@@ -68,6 +74,10 @@ const Game = () => {
   
   const { getAiMove, resetHistory } = useAiOpponent();
   
+  // For game tour
+  const { startTour, TourComponent } = useGameTour();
+  const [showOutMessage, setShowOutMessage] = useState(false);
+  
   useEffect(() => {
     if (playerChoice !== null && aiChoice === null) {
       setAiThinking(true);
@@ -92,8 +102,41 @@ const Game = () => {
       console.log("Setting showGameOver to true", {gameState, showGameOver});
       setShowGameOver(true);
       setShowInningsEnd(false);
+      
+      // Save game history to Supabase
+      saveGameHistory();
     }
-  }, [innings, target, gameState, showInningsEnd, showGameOver, transitionCompleted]);
+    
+    // Add out message display
+    if (isOut && !showOutMessage) {
+      setShowOutMessage(true);
+      setTimeout(() => {
+        setShowOutMessage(false);
+      }, 2000);
+    }
+  }, [innings, target, gameState, showInningsEnd, showGameOver, transitionCompleted, isOut]);
+
+  // Save game history to Supabase
+  const saveGameHistory = async () => {
+    try {
+      const result = playerScore > aiScore ? 'win' : (playerScore < aiScore ? 'loss' : 'draw');
+      
+      await supabase.from('game_history').insert([
+        {
+          user_id: user?.id || '00000000-0000-0000-0000-000000000000', // Use a placeholder UUID for anonymous users
+          player_score: playerScore,
+          ai_score: aiScore,
+          balls_played: ballsPlayed,
+          result: result,
+          user_batting: userBatting
+        }
+      ]);
+      
+      console.log('Game history saved successfully');
+    } catch (error) {
+      console.error('Error saving game history:', error);
+    }
+  };
 
   const handleGestureDetected = (gesture: number) => {
     makeChoice(gesture);
@@ -136,6 +179,11 @@ const Game = () => {
       description: "Get ready to play!",
       variant: "default"
     });
+    
+    // Start the tour after the game starts
+    setTimeout(() => {
+      startTour();
+    }, 1000);
   };
 
   const handleContinueToNextInnings = () => {
@@ -166,6 +214,7 @@ const Game = () => {
     setShowGameOver(false);
     setShowHandDetector(false);
     setInningsTransitionInProgress(false);
+    setShowOutMessage(false);
   };
 
   const handlePause = () => {
@@ -202,10 +251,27 @@ const Game = () => {
       });
     }
   };
+  
+  // Fix for mobile scrolling issues - prevent waves background from capturing touch events
+  useEffect(() => {
+    const fixMobileScrolling = () => {
+      const waves = document.querySelector('.waves-container');
+      if (waves) {
+        waves.classList.add('pointer-events-none');
+      }
+    };
+    
+    fixMobileScrolling();
+    window.addEventListener('resize', fixMobileScrolling);
+    
+    return () => {
+      window.removeEventListener('resize', fixMobileScrolling);
+    };
+  }, []);
 
   return (
-    <div className="relative min-h-screen w-full bg-background flex flex-col items-center justify-center p-4">
-      <div className="absolute inset-0 z-0">
+    <div className="relative min-h-screen w-full bg-background flex flex-col items-center justify-center p-4 overflow-auto">
+      <div className="absolute inset-0 z-0 waves-container pointer-events-none">
         <Waves
           lineColor={theme === "dark" ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"}
           backgroundColor="transparent"
@@ -233,6 +299,7 @@ const Game = () => {
               onClick={handleDeclareInnings}
               className="bg-background/80 hover:bg-background"
               title="Declare Innings"
+              data-tour="declare-button"
             >
               <Flag className="h-4 w-4 text-primary" />
             </Button>
@@ -242,18 +309,45 @@ const Game = () => {
             size="icon" 
             onClick={handlePause}
             className="bg-background/80 hover:bg-background"
+            data-tour="pause-button"
           >
             <Pause className="h-4 w-4" />
           </Button>
         </div>
         
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate('/')}
+          className="absolute top-4 left-4 bg-background/80 hover:bg-background"
+        >
+          Back to Home
+        </Button>
+        
         <GameHeader 
           gameState={gameState} 
-          userName={user?.name} 
+          userName={user?.name || 'Guest'} 
           isCalibrating={showHandDetector && !showGameOver && !showInningsEnd}
           isProcessingGesture={aiThinking}
           isCamera={showHandDetector}
+          useTextShimmer={true}  // New prop to use TextShimmerWave instead of GooeyText
+          dataTour="game-header"
         />
+        
+        {/* Out Message Overlay */}
+        {showOutMessage && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center animate-fade-in">
+            <div className="bg-black/70 p-8 rounded-xl">
+              <TextShimmerWave
+                className="text-5xl font-bold [--base-color:#ff0000] [--base-gradient-color:#ff6b6b]"
+                duration={0.8}
+                spread={2}
+              >
+                OUT!
+              </TextShimmerWave>
+            </div>
+          </div>
+        )}
         
         <GameOverlay
           aiThinking={aiThinking}
@@ -270,12 +364,13 @@ const Game = () => {
         />
         
         <div className="flex flex-col md:flex-row gap-6">
-          <div className="flex-1 flex flex-col gap-4">
+          <div className="flex-1 flex flex-col gap-4" data-tour="game-info-section">
             <ScoreDisplay 
               playerScore={playerScore} 
               aiScore={aiScore} 
               target={target} 
-              innings={innings} 
+              innings={innings}
+              dataTour="score-display"
             />
             
             <GameInfo 
@@ -286,6 +381,7 @@ const Game = () => {
               isOut={isOut} 
               userBatting={userBatting}
               ballsPlayed={ballsPlayed}
+              dataTour="game-info"
             />
             
             <GameControls 
@@ -297,10 +393,11 @@ const Game = () => {
               onTossChoice={handleTossChoice}
               onBatBowlChoice={handleBatBowlChoice}
               onRestartGame={handleRestartGame}
+              dataTour="game-controls"
             />
           </div>
           
-          <div className="flex-1">
+          <div className="flex-1" data-tour="camera-section">
             <GameCamera
               onGestureDetected={handleGestureDetected}
               disabled={isPaused}
@@ -309,10 +406,14 @@ const Game = () => {
               isPaused={isPaused}
               showInningsEnd={showInningsEnd}
               showGameOver={showGameOver}
+              dataTour="game-camera"
             />
           </div>
         </div>
       </div>
+      
+      {/* Game Tour Component */}
+      <TourComponent />
     </div>
   );
 };
