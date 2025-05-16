@@ -7,12 +7,15 @@ interface TossControlsProps {
   wonToss: boolean;
   onTossChoice: (choice: 'heads' | 'tails') => void;
   onBatBowlChoice: (isBatting: boolean) => void;
+  // Add the countdown prop to match what's being passed in GameControls.tsx
+  countdown?: number;
 }
 
 const TossControls: React.FC<TossControlsProps> = ({ 
   wonToss, 
   onTossChoice, 
-  onBatBowlChoice 
+  onBatBowlChoice,
+  countdown 
 }) => {
   const handleTossChoice = (choice: 'heads' | 'tails') => {
     onTossChoice(choice);

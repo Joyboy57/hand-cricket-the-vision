@@ -8,6 +8,7 @@ import { TextShimmerWave } from '@/components/ui/text-shimmer-wave';
 import { Progress } from '@/components/ui/progress';
 import { RefreshCw, Camera, CameraOff } from 'lucide-react';
 import { HyperText } from '@/components/ui/hyper-text';
+import { GameStateType } from '@/lib/game-types';
 
 interface HandGestureDetectorProps {
   onGestureDetected: (gesture: number) => void;
@@ -15,6 +16,11 @@ interface HandGestureDetectorProps {
   onCameraStatusChange?: (isActive: boolean) => void;
   onProcessingChange?: (isProcessing: boolean) => void;
   disabled?: boolean;
+  // Add these new props to match what's being passed in GameCamera.tsx
+  gameState?: GameStateType;
+  isPaused?: boolean;
+  showInningsEnd?: boolean;
+  showGameOver?: boolean;
 }
 
 const HandGestureDetector: React.FC<HandGestureDetectorProps> = ({ 
