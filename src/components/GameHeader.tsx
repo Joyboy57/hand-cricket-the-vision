@@ -10,6 +10,8 @@ interface GameHeaderProps {
   isCalibrating?: boolean;
   isProcessingGesture?: boolean;
   isCamera?: boolean;
+  useTextShimmer?: boolean;
+  dataTour?: string;
 }
 
 const GameHeader: React.FC<GameHeaderProps> = ({ 
@@ -17,7 +19,9 @@ const GameHeader: React.FC<GameHeaderProps> = ({
   userName,
   isCalibrating = false,
   isProcessingGesture = false,
-  isCamera = true
+  isCamera = true,
+  useTextShimmer = false,
+  dataTour
 }) => {
   const getGameStateText = () => {
     if (!isCamera) return 'Camera Not Available';
@@ -34,7 +38,7 @@ const GameHeader: React.FC<GameHeaderProps> = ({
   };
 
   return (
-    <div className="mb-6 text-center">
+    <div className="mb-6 text-center" data-tour={dataTour}>
       <h1 className="text-3xl font-bold mb-2">Cricket Hand Gesture Game</h1>
       <p className="text-muted-foreground">
         Welcome {userName || 'Guest'} to Hand Cricket!
@@ -48,6 +52,15 @@ const GameHeader: React.FC<GameHeaderProps> = ({
             textClassName="text-2xl"
           >
             Processing your gesture...
+          </TextShimmerWave>
+        ) : useTextShimmer ? (
+          <TextShimmerWave
+            className="font-bold [--base-color:#0D74CE] [--base-gradient-color:#5EB1EF]"
+            duration={1.5}
+            spread={1.5}
+            textClassName="text-4xl"
+          >
+            {getGameStateText()}
           </TextShimmerWave>
         ) : (
           <GooeyText

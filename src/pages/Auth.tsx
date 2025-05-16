@@ -1,6 +1,6 @@
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,9 +16,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const Auth = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
-  const { login, register } = useAuth();
+  const { login, register, isAuthenticated } = useAuth();
   
   const [loginData, setLoginData] = useState({
     email: "",
@@ -32,6 +33,13 @@ const Auth = () => {
   });
 
   const [authError, setAuthError] = useState<string | null>(null);
+  
+  // Redirect if user is already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/home');
+    }
+  }, [isAuthenticated, navigate]);
 
   // Password validation
   const validatePassword = (password: string): boolean => {
@@ -60,7 +68,8 @@ const Auth = () => {
         title: "Logged in successfully",
         description: "Welcome back!",
       });
-      navigate('/game');
+      // Redirected to home page instead of game page
+      navigate('/home');
     } catch (error) {
       console.error("Login error:", error);
       const errorMessage = error instanceof Error ? error.message : "Invalid email or password";
@@ -93,7 +102,8 @@ const Auth = () => {
         title: "Account created",
         description: "Your account has been created successfully!",
       });
-      navigate('/game');
+      // Redirected to home page instead of game page
+      navigate('/home');
     } catch (error) {
       console.error("Signup error:", error);
       const errorMessage = error instanceof Error ? error.message : "Signup failed";
@@ -113,7 +123,7 @@ const Auth = () => {
       title: "Continuing as guest",
       description: "You can create an account later to save your progress.",
     });
-    navigate('/game');
+    navigate('/home');
   };
 
   return (
@@ -121,6 +131,13 @@ const Auth = () => {
       <RetroGrid className="opacity-30" />
       
       <div className="h-[240px] w-full mb-2 relative z-10 flex flex-col items-center justify-center">
+        <div className="w-32 h-32 mx-auto mb-6">
+          <img 
+            src="/lovable-uploads/e09979c0-a977-43d3-86c7-53b2b69c5dab.png" 
+            alt="Hand Cricket The Vision Logo" 
+            className="w-full h-full object-contain"
+          />
+        </div>
         <div className="mb-6">
           <HyperText
             className="text-4xl font-bold text-indigo-600"

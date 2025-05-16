@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 type AuthUser = {
   id: string;
@@ -217,6 +218,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       {children}
     </AuthContext.Provider>
   );
+};
+
+// Redirect wrapper component for protected routes
+export const RequireAuth = ({ children }: { children: ReactNode }) => {
+  const { isAuthenticated, isLoading } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      navigate('/', { state: { from: location } });
+    }
+  }, [isAuthenticated, isLoading, navigate, location]);
+
+  if (isLoading) {
+    return <div>Loading...</div>;
+  }
+
+  return <>{children}</>;
 };
 
 export const useAuth = () => {

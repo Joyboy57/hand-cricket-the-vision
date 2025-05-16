@@ -2,18 +2,20 @@
 import React from 'react';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 
-interface ScoreDisplayProps {
+export interface ScoreDisplayProps {
   playerScore: number;
   aiScore: number;
-  target?: number | null;
-  innings?: number;
+  target: number;
+  innings: number;
+  dataTour?: string;  // Add this prop
 }
 
-const ScoreDisplay: React.FC<ScoreDisplayProps> = ({ 
-  playerScore, 
-  aiScore, 
-  target = null,
-  innings = 1
+const ScoreDisplay: React.FC<ScoreDisplayProps> = ({
+  playerScore,
+  aiScore,
+  target,
+  innings,
+  dataTour
 }) => {
   return (
     <div className="grid grid-cols-2 gap-4 mb-4">
