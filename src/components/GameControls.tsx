@@ -1,18 +1,18 @@
-
 import React from 'react';
-import { ButtonCta } from '@/components/ui/button-shiny';
 import { GameStateType } from '@/lib/game-types';
 import TossControls from './TossControls';
+import { Button } from '@/components/ui/button';
 
-interface GameControlsProps {
+export interface GameControlsProps {
   gameState: GameStateType;
   wonToss: boolean;
-  countdown: number | null;
+  countdown: number;
   playerScore: number;
   aiScore: number;
   onTossChoice: (choice: 'heads' | 'tails') => void;
   onBatBowlChoice: (isBatting: boolean) => void;
   onRestartGame: () => void;
+  dataTour?: string;
 }
 
 const GameControls: React.FC<GameControlsProps> = ({
@@ -23,50 +23,43 @@ const GameControls: React.FC<GameControlsProps> = ({
   aiScore,
   onTossChoice,
   onBatBowlChoice,
-  onRestartGame
+  onRestartGame,
+  dataTour
 }) => {
-  return (
-    <div className="bg-background/80 p-4 rounded-lg">
-      {gameState === 'toss' && (
-        <TossControls 
-          wonToss={wonToss} 
-          onTossChoice={onTossChoice} 
-          onBatBowlChoice={onBatBowlChoice} 
-        />
-      )}
-      
-      {gameState === 'gameOver' && (
-        <div className="flex flex-col items-center gap-3">
-          <p className="text-xl font-bold text-center">
-            {playerScore > aiScore ? 'You Won! 🎉' : 
-             playerScore < aiScore ? 'AI Won! 🤖' : 'It\'s a Tie! 🤝'}
-          </p>
-          <ButtonCta 
-            label="Play Again" 
-            onClick={onRestartGame}
-            className="w-full"
+  const renderControls = () => {
+    switch (gameState) {
+      case 'toss':
+        return (
+          <TossControls
+            wonToss={wonToss}
+            countdown={countdown}
+            onTossChoice={onTossChoice}
+            onBatBowlChoice={onBatBowlChoice}
           />
-        </div>
-      )}
-      
-      {(gameState === 'batting' || gameState === 'bowling') && countdown !== null && (
-        <div className="flex justify-center items-center h-20">
-          <p className="text-3xl font-bold">Next ball in: {countdown}</p>
-        </div>
-      )}
-      
-      {(gameState === 'batting' || gameState === 'bowling') && countdown === null && (
-        <div className="p-3 bg-primary/10 rounded-lg text-center">
-          <p className="text-primary">
-            {gameState === 'batting' 
-              ? "Show your hand gesture to score runs!" 
-              : "Show your hand gesture to try and get the AI out!"}
-          </p>
-          <div className="mt-2 text-xs text-muted-foreground">
-            1-4 fingers = score 1-4 | Open hand = 5 | Thumbs up = 6
+        );
+      case 'batting':
+      case 'bowling':
+        return (
+          <div>
+            <p>Game in progress...</p>
           </div>
-        </div>
-      )}
+        );
+      case 'gameOver':
+        return (
+          <div>
+            <p>Your Score: {playerScore}</p>
+            <p>AI Score: {aiScore}</p>
+            <Button onClick={onRestartGame}>Restart Game</Button>
+          </div>
+        );
+      default:
+        return <p>Loading...</p>;
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center justify-center mt-4" data-tour={dataTour}>
+      {renderControls()}
     </div>
   );
 };
