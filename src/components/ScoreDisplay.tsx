@@ -1,47 +1,56 @@
 
 import React from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { AnimatedCounter } from '@/components/ui/animated-counter';
 
-export interface ScoreDisplayProps {
+interface ScoreDisplayProps {
   playerScore: number;
   aiScore: number;
-  target: number;
+  target: number | null;
   innings: number;
-  dataTour?: string;  // Add this prop
+  dataTour?: string;
 }
 
-const ScoreDisplay: React.FC<ScoreDisplayProps> = ({
-  playerScore,
-  aiScore,
+const ScoreDisplay: React.FC<ScoreDisplayProps> = ({ 
+  playerScore, 
+  aiScore, 
   target,
   innings,
-  dataTour
+  dataTour = "score-display" // Default value to ensure it always has the attribute
 }) => {
   return (
-    <div className="grid grid-cols-2 gap-4 mb-4">
-      <div className="bg-background/80 p-4 rounded-lg text-center">
-        <h3 className="text-lg font-medium mb-2">Your Score</h3>
-        <div className="flex justify-center">
-          <AnimatedCounter value={playerScore} />
+    <Card className="bg-card/90 backdrop-blur-sm border-primary/20" data-tour={dataTour}>
+      <CardContent className="p-4">
+        <div className="flex justify-between items-center">
+          <div className="text-center flex-1">
+            <p className="text-sm text-muted-foreground">You</p>
+            <div className="text-4xl font-bold">
+              <AnimatedCounter value={playerScore} />
+            </div>
+          </div>
+          
+          <div className="text-center px-4">
+            <p className="text-xs text-muted-foreground">vs</p>
+            <p className="text-sm font-medium">Innings {innings}</p>
+          </div>
+          
+          <div className="text-center flex-1">
+            <p className="text-sm text-muted-foreground">AI</p>
+            <div className="text-4xl font-bold">
+              <AnimatedCounter value={aiScore} />
+            </div>
+          </div>
         </div>
-        {target && innings === 2 && (
-          <div className="mt-2 text-sm text-primary">
-            Target: {target}
+        
+        {target !== null && innings === 2 && (
+          <div className="mt-2 text-center border-t border-primary/20 pt-2">
+            <p className="text-sm text-muted-foreground">
+              Target: <span className="font-medium text-foreground">{target}</span>
+            </p>
           </div>
         )}
-      </div>
-      <div className="bg-background/80 p-4 rounded-lg text-center">
-        <h3 className="text-lg font-medium mb-2">AI Score</h3>
-        <div className="flex justify-center">
-          <AnimatedCounter value={aiScore} />
-        </div>
-        {target && innings === 2 && (
-          <div className="mt-2 text-sm text-primary">
-            Target: {target}
-          </div>
-        )}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

@@ -1,4 +1,3 @@
-
 import { useRef, useEffect } from "react"
 import { cn } from "@/lib/utils"
 
@@ -21,6 +20,10 @@ interface WavesProps {
   tension?: number
   maxCursorMove?: number
   className?: string
+  /**
+   * Whether to capture pointer events (set to false for mobile scrolling)
+   */
+  capturePointerEvents?: boolean
 }
 
 class Grad {
@@ -134,6 +137,7 @@ export function Waves({
   tension = 0.005,
   maxCursorMove = 100,
   className,
+  capturePointerEvents = false,
 }: WavesProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -333,13 +337,19 @@ export function Waves({
     setLines()
     requestAnimationFrame(tick)
     window.addEventListener("resize", onResize)
-    window.addEventListener("mousemove", onMouseMove)
-    window.addEventListener("touchmove", onTouchMove, { passive: false })
+    
+    // Only add mouse/touch listeners if we're capturing pointer events
+    if (capturePointerEvents) {
+      window.addEventListener("mousemove", onMouseMove)
+      window.addEventListener("touchmove", onTouchMove, { passive: false })
+    }
 
     return () => {
       window.removeEventListener("resize", onResize)
-      window.removeEventListener("mousemove", onMouseMove)
-      window.removeEventListener("touchmove", onTouchMove)
+      if (capturePointerEvents) {
+        window.removeEventListener("mousemove", onMouseMove)
+        window.removeEventListener("touchmove", onTouchMove)
+      }
     }
   }, [
     lineColor,
@@ -353,6 +363,7 @@ export function Waves({
     maxCursorMove,
     xGap,
     yGap,
+    capturePointerEvents,
   ])
 
   return (
@@ -360,6 +371,7 @@ export function Waves({
       ref={containerRef}
       style={{
         backgroundColor,
+        pointerEvents: capturePointerEvents ? "auto" : "none",
       }}
       className={cn(
         "absolute top-0 left-0 w-full h-full overflow-hidden",

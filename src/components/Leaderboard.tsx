@@ -4,19 +4,27 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Trophy, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trophy, ChevronDown, ChevronUp, Medal } from 'lucide-react';
 
 interface LeaderboardEntry {
   user_id: string;
   name: string;
   highest_score: number;
   total_games: number;
+  rank?: number;
 }
 
-export const Leaderboard = () => {
+interface LeaderboardProps {
+  userId?: string | null;
+  onUserRankUpdate?: (rank: number | null) => void;
+}
+
+export const Leaderboard: React.FC<LeaderboardProps> = ({ userId, onUserRankUpdate }) => {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const [userRank, setUserRank] = useState<number | null>(null);
+  const [userEntry, setUserEntry] = useState<LeaderboardEntry | null>(null);
   
   useEffect(() => {
     const fetchLeaderboard = async () => {
@@ -30,9 +38,7 @@ export const Leaderboard = () => {
             user_id,
             player_score,
             profiles(name)
-          `)
-          .order('player_score', { ascending: false })
-          .limit(expanded ? 20 : 5);
+          `);
           
         if (error) throw error;
         
@@ -44,28 +50,51 @@ export const Leaderboard = () => {
             const userId = entry.user_id;
             const name = entry.profiles?.name || 'Anonymous';
             
-            if (!processedData[userId] || entry.player_score > processedData[userId].highest_score) {
-              if (!processedData[userId]) {
-                processedData[userId] = {
-                  user_id: userId,
-                  name,
-                  highest_score: entry.player_score,
-                  total_games: 1
-                };
-              } else {
-                processedData[userId].highest_score = entry.player_score;
-                processedData[userId].total_games += 1;
-              }
+            if (!processedData[userId]) {
+              processedData[userId] = {
+                user_id: userId,
+                name,
+                highest_score: entry.player_score,
+                total_games: 1
+              };
+            } else {
+              processedData[userId].highest_score = Math.max(processedData[userId].highest_score, entry.player_score);
+              processedData[userId].total_games += 1;
             }
           }
         }
         
         // Convert to array and sort
-        const leaderboardArray = Object.values(processedData)
-          .sort((a, b) => b.highest_score - a.highest_score)
-          .slice(0, expanded ? 20 : 5);
+        let leaderboardArray = Object.values(processedData)
+          .sort((a, b) => b.highest_score - a.highest_score);
+        
+        // Add ranks
+        leaderboardArray = leaderboardArray.map((entry, index) => ({
+          ...entry,
+          rank: index + 1
+        }));
           
-        setLeaderboard(leaderboardArray);
+        // Find user's position
+        if (userId) {
+          const userPosition = leaderboardArray.findIndex(entry => entry.user_id === userId);
+          if (userPosition !== -1) {
+            const rank = userPosition + 1;
+            setUserRank(rank);
+            setUserEntry(leaderboardArray[userPosition]);
+            // Call the callback if provided
+            if (onUserRankUpdate) {
+              onUserRankUpdate(rank);
+            }
+          } else {
+            setUserRank(null);
+            setUserEntry(null);
+            if (onUserRankUpdate) {
+              onUserRankUpdate(null);
+            }
+          }
+        }
+          
+        setLeaderboard(leaderboardArray.slice(0, expanded ? 20 : 5));
       } catch (error) {
         console.error('Error fetching leaderboard:', error);
       } finally {
@@ -74,7 +103,7 @@ export const Leaderboard = () => {
     };
     
     fetchLeaderboard();
-  }, [expanded]);
+  }, [expanded, userId, onUserRankUpdate]);
   
   if (loading) {
     return (
@@ -93,6 +122,9 @@ export const Leaderboard = () => {
     );
   }
   
+  // Function to determine if this entry is the current user
+  const isCurrentUser = (entry: LeaderboardEntry) => userId && entry.user_id === userId;
+
   return (
     <div className="space-y-3">
       {leaderboard.length === 0 ? (
@@ -101,24 +133,31 @@ export const Leaderboard = () => {
         </div>
       ) : (
         <>
-          {leaderboard.map((player, index) => (
+          {leaderboard.map((player) => (
             <div 
               key={player.user_id} 
               className={`flex items-center p-3 rounded-lg ${
-                index === 0 
+                player.rank === 1 
                   ? 'bg-amber-500/10 border border-amber-500/30' 
-                  : index === 1 
+                  : player.rank === 2 
                   ? 'bg-slate-400/10 border border-slate-400/30' 
-                  : index === 2 
+                  : player.rank === 3 
                   ? 'bg-orange-400/10 border border-orange-400/30'
+                  : isCurrentUser(player)
+                  ? 'bg-primary/10 border border-primary/30'
                   : 'bg-background/40'
               }`}
+              data-current-user={isCurrentUser(player)}
             >
               <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-muted-foreground font-medium text-sm">
-                {index === 0 ? (
+                {player.rank === 1 ? (
                   <Trophy className="h-4 w-4 text-amber-500" />
+                ) : player.rank === 2 ? (
+                  <Medal className="h-4 w-4 text-slate-400" />
+                ) : player.rank === 3 ? (
+                  <Medal className="h-4 w-4 text-orange-400" />
                 ) : (
-                  <span>{index + 1}</span>
+                  <span>{player.rank}</span>
                 )}
               </div>
               
@@ -130,7 +169,9 @@ export const Leaderboard = () => {
               </Avatar>
               
               <div className="ml-3 flex-1">
-                <p className="font-medium">{player.name}</p>
+                <p className={`font-medium ${isCurrentUser(player) ? 'text-primary' : ''}`}>
+                  {player.name} {isCurrentUser(player) && <span>(You)</span>}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {player.total_games} {player.total_games === 1 ? 'game' : 'games'} played
                 </p>
@@ -141,6 +182,35 @@ export const Leaderboard = () => {
               </div>
             </div>
           ))}
+          
+          {/* Display user's position if not in top 5 and not expanded */}
+          {!expanded && userRank && userRank > 5 && userEntry && (
+            <div className="mt-4 p-3 rounded-lg bg-primary/10 border border-primary/30">
+              <div className="flex items-center">
+                <div className="flex items-center justify-center h-8 w-8 rounded-full bg-muted text-muted-foreground font-medium text-sm">
+                  <span>{userRank}</span>
+                </div>
+                
+                <Avatar className="ml-3">
+                  <AvatarImage src={`https://api.dicebear.com/7.x/initials/svg?seed=${userEntry.name}`} />
+                  <AvatarFallback>
+                    {userEntry.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                
+                <div className="ml-3 flex-1">
+                  <p className="font-medium text-primary">{userEntry.name} <span>(You)</span></p>
+                  <p className="text-xs text-muted-foreground">
+                    {userEntry.total_games} {userEntry.total_games === 1 ? 'game' : 'games'} played
+                  </p>
+                </div>
+                
+                <div className="font-bold text-lg">
+                  {userEntry.highest_score}
+                </div>
+              </div>
+            </div>
+          )}
           
           <Button 
             variant="ghost" 

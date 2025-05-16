@@ -271,12 +271,13 @@ const Game = () => {
 
   return (
     <div className="relative min-h-screen w-full bg-background flex flex-col items-center justify-center p-4 overflow-auto">
-      <div className="absolute inset-0 z-0 waves-container pointer-events-none">
+      <div className="absolute inset-0 z-0">
         <Waves
           lineColor={theme === "dark" ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"}
           backgroundColor="transparent"
           waveSpeedX={0.015}
           waveSpeedY={0.01}
+          capturePointerEvents={false}
         />
       </div>
       

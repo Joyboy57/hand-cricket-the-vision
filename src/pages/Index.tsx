@@ -14,26 +14,49 @@ import { GameHistory } from '@/components/GameHistory';
 import { Leaderboard } from '@/components/Leaderboard';
 import { HyperText } from '@/components/ui/hyper-text';
 import { RetroGrid } from '@/components/ui/retro-grid';
-import { Trophy } from 'lucide-react';
+import { LogOut, Trophy } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
 
 const Index = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, signOut } = useAuth();
   const { theme } = useTheme();
   const [showLeaderboard, setShowLeaderboard] = useState(true);
+  const [userRank, setUserRank] = useState<number | null>(null);
   
   const handleStartGame = () => {
     navigate('/game');
   };
 
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Logged out successfully",
+        description: "You have been logged out of your account",
+        duration: 3000
+      });
+      navigate('/');
+    } catch (error) {
+      console.error('Error logging out:', error);
+      toast({
+        title: "Error logging out",
+        description: "There was a problem logging you out. Please try again.",
+        variant: "destructive",
+        duration: 3000
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen w-full bg-background">
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 z-0 overflow-hidden">
         <Waves
           lineColor={theme === "dark" ? "rgba(255, 255, 255, 0.2)" : "rgba(0, 0, 0, 0.2)"}
           backgroundColor="transparent"
           waveSpeedX={0.015}
           waveSpeedY={0.01}
+          capturePointerEvents={false}
         />
       </div>
       
@@ -94,7 +117,18 @@ const Index = () => {
                   />
                 </div>
                 
-                {!isAuthenticated && (
+                {isAuthenticated ? (
+                  <div className="flex justify-center">
+                    <Button 
+                      variant="outline"
+                      onClick={handleLogout}
+                      className="w-full max-w-xs flex items-center gap-2"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Logout
+                    </Button>
+                  </div>
+                ) : (
                   <div className="bg-primary/10 p-4 rounded-lg text-center">
                     <p className="text-sm text-muted-foreground">
                       Sign in to track your scores and compete on the leaderboard
@@ -106,6 +140,13 @@ const Index = () => {
                     >
                       Login / Sign Up
                     </Button>
+                  </div>
+                )}
+
+                {userRank && (
+                  <div className="bg-amber-500/10 p-4 rounded-lg text-center border border-amber-500/30">
+                    <p className="text-sm font-medium">Your Leaderboard Position</p>
+                    <p className="text-2xl font-bold text-amber-500">{userRank}</p>
                   </div>
                 )}
               </CardContent>
@@ -167,7 +208,7 @@ const Index = () => {
                 
                 <CardContent className="min-h-[400px]">
                   {showLeaderboard ? (
-                    <Leaderboard />
+                    <Leaderboard onUserRankUpdate={setUserRank} userId={isAuthenticated ? user?.id : null} />
                   ) : (
                     <GameHistory userId={isAuthenticated ? user?.id : null} />
                   )}
