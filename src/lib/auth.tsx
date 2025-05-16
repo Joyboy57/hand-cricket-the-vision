@@ -3,9 +3,14 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Session, User } from '@supabase/supabase-js';
 
+// Extended User type with name property
+type ExtendedUser = User & {
+  name?: string;
+};
+
 type AuthContextType = {
   session: Session | null;
-  user: User | null;
+  user: ExtendedUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{
@@ -39,7 +44,7 @@ const cleanupAuthState = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<ExtendedUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -49,14 +54,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       (event, session) => {
         console.log('Auth state changed:', event);
         setSession(session);
-        setUser(session?.user ?? null);
+        
+        // Add name from user metadata if available
+        if (session?.user) {
+          const userData = {
+            ...session.user,
+            name: session.user.user_metadata?.name || 
+                  session.user.user_metadata?.full_name || 
+                  session.user.user_metadata?.preferred_username || 
+                  'User'
+          };
+          setUser(userData);
+        } else {
+          setUser(null);
+        }
       }
     );
 
     // THEN check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      
+      // Add name from user metadata if available
+      if (session?.user) {
+        const userData = {
+          ...session.user,
+          name: session.user.user_metadata?.name || 
+                session.user.user_metadata?.full_name || 
+                session.user.user_metadata?.preferred_username || 
+                'User'
+        };
+        setUser(userData);
+      } else {
+        setUser(null);
+      }
+      
       setIsLoading(false);
     });
 
